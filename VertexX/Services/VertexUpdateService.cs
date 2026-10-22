@@ -27,9 +27,11 @@ public sealed class VertexUpdateService
     private string? _pendingHash;
 
     public static string CurrentVersion =>
-        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.5.2";
+        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.6.0";
 
     public string? PendingVersion { get; private set; }
+    public string StatusMessage { get; private set; } = "No update check yet.";
+    public bool HasError { get; private set; }
 
     public async Task<bool> CheckAsync(Window owner, bool quietWhenCurrent, bool automatic = false)
     {
@@ -37,12 +39,15 @@ public sealed class VertexUpdateService
 
         try
         {
+            HasError = false;
+            StatusMessage = "Checking GitHub releases…";
             using var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
             request.Headers.UserAgent.Add(new ProductInfoHeaderValue("VertexX", CurrentVersion));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             using var response = await Http.SendAsync(request);
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
+                StatusMessage = "No published release is available yet.";
                 if (!quietWhenCurrent)
                     MessageBox.Show(owner, "Vertex X has no published release yet.", "Vertex X Updates");
                 return false;
@@ -53,6 +58,7 @@ public sealed class VertexUpdateService
             var release = VertexRelease.SelectLatest(json.RootElement);
             if (release == null)
             {
+                StatusMessage = "No complete published release is available yet.";
                 if (!quietWhenCurrent)
                     MessageBox.Show(owner, "Vertex X has no compatible published release yet.", "Vertex X Updates");
                 return false;
@@ -62,6 +68,7 @@ public sealed class VertexUpdateService
             var current = Version.Parse(CurrentVersion);
             if (latest <= current)
             {
+                StatusMessage = "Vertex X " + CurrentVersion + " is up to date.";
                 if (!quietWhenCurrent)
                     MessageBox.Show(owner, "Vertex X " + CurrentVersion + " is up to date.", "Vertex X Updates");
                 return false;
@@ -146,6 +153,7 @@ public sealed class VertexUpdateService
             _pendingSetup = destination;
             _pendingHash = expectedHash;
             PendingVersion = version;
+            StatusMessage = "Version " + version + " is verified and ready to install on exit.";
 
             if (!automatic)
                 MessageBox.Show(owner,
@@ -155,6 +163,8 @@ public sealed class VertexUpdateService
         }
         catch (Exception ex)
         {
+            HasError = true;
+            StatusMessage = "Update check failed: " + ex.Message;
             if (!quietWhenCurrent)
                 MessageBox.Show(owner, "Vertex X could not check or prepare the update:\n" + ex.Message,
                     "Vertex X Updates", MessageBoxButton.OK, MessageBoxImage.Warning);

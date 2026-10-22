@@ -1,7 +1,7 @@
 # Build and optionally publish Vertex X using .NET 8 and NSIS. No Actions required.
 [CmdletBinding()]
 param(
-  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.5.2',
+  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.6.0',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'
@@ -24,6 +24,23 @@ if (((& dotnet --list-sdks) -join "`n") -notmatch '(?m)^8\.') { Install-Tool 'Mi
 if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) { Install-Tool 'NSIS.NSIS' }
 $nsis = Get-Command makensis.exe -ErrorAction SilentlyContinue
 if (!$nsis) { throw 'Reopen this builder after installing NSIS.' }
+if (!(Get-Command npm -ErrorAction SilentlyContinue)) { Install-Tool 'OpenJS.NodeJS.LTS' }
+if (!(Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Reopen the builder after installing Node.js.' }
+Push-Location (Join-Path $root 'frontend')
+try {
+  & npm.cmd ci
+  if ($LASTEXITCODE -ne 0) { throw 'React dependency installation failed.' }
+  & npm.cmd run build
+  if ($LASTEXITCODE -ne 0) { throw 'React UI build failed.' }
+} finally { Pop-Location }
+$prerequisites = Join-Path $root 'installer\prerequisites'
+New-Item -ItemType Directory -Force -Path $prerequisites | Out-Null
+$bootstrapper = Join-Path $prerequisites 'MicrosoftEdgeWebview2Setup.exe'
+Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
+$signature = Get-AuthenticodeSignature -FilePath $bootstrapper
+if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+  throw 'The WebView2 prerequisite does not have a valid Microsoft signature.'
+}
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 # A clean payload prevents removed dependencies leaking into future installers.
 if (Test-Path $publishDir) { Remove-Item -LiteralPath $publishDir -Recurse -Force }
@@ -32,6 +49,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'Account regression checks failed.' }
 & dotnet run --project (Join-Path $root 'tests\VertexX.UpdateChecks') -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'Update regression checks failed.' }
+& dotnet run --project (Join-Path $root 'tests\VertexX.RuntimeChecks') -p:NuGetAudit=false
+if ($LASTEXITCODE -ne 0) { throw 'Lua runtime checks failed.' }
 & dotnet publish $project -c Release -r win-x64 --self-contained true "-p:Version=$Version" '-p:PublishSingleFile=false' -o $publishDir
 if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
 if (!(Test-Path (Join-Path $publishDir 'VertexX.exe'))) { throw 'Application EXE is missing.' }

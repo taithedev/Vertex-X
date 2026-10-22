@@ -1,317 +1,284 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
-using MoonSharp.Interpreter;
-
 namespace VertexX;
 
 public partial class MainWindow : Window
 {
+    private const string Origin = "https://vertexx.local";
+    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private readonly string _data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VertexX");
     private readonly string _library = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Vertex X", "Scripts");
-    private readonly string _preferencesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VertexX", "settings.json");
-    private readonly Dictionary<TabItem, string?> _paths = new();
-    private Preferences _preferences = new();
     private readonly VertexAuthService _auth = new();
     private readonly VertexUpdateService _updates = new();
-    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(4) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromHours(4) };
+    private readonly SemaphoreSlim _accountGate = new(1, 1);
+    private readonly SemaphoreSlim _fileGate = new(1, 1);
+    private Dictionary<string, string> _paths = new();
+    private Preferences _preferences = new();
+    private CancellationTokenSource? _execution;
+    private bool _allowClose;
+    private bool _ready;
+    private bool _closed;
+    private bool _initializing;
+    private bool _configured;
+    private bool _closeRequested;
 
     public MainWindow()
     {
         InitializeComponent();
-        VersionBadge.Text = "BETA " + VertexUpdateService.CurrentVersion;
         Title = "Vertex X " + VertexUpdateService.CurrentVersion;
-        Directory.CreateDirectory(_library);
-        LoadPreferences();
-        AddTab("Untitled.lua", "print('Welcome to Vertex X!')\n");
-        RefreshLibrary();
-        StatusText.Text = "Ready • Scripts: " + _library;
-        _updateTimer.Tick += async (_, _) => await CheckForUpdatesSilentlyAsync();
-        Loaded += async (_, _) =>
+        _timer.Tick += async (_, _) => await AutomaticUpdateAsync();
+    }
+    private async void Window_Loaded(object sender, RoutedEventArgs e) => await InitializeAsync();
+    private async void Retry_Click(object sender, RoutedEventArgs e) => await InitializeAsync();
+    private async Task InitializeAsync()
+    {
+        if (_initializing || _ready) return;
+        _initializing = true;
+        RetryButton.Visibility = Visibility.Collapsed;
+        try
         {
-            _updateTimer.Start();
-            await CheckForUpdatesSilentlyAsync();
-        };
-    }
-
-    private TextBox? ActiveEditor => (EditorTabs.SelectedItem as TabItem)?.Content as TextBox;
-    private TabItem? ActiveTab => EditorTabs.SelectedItem as TabItem;
-
-    private void AddTab(string title, string content, string? path = null)
-    {
-        var editor = new TextBox {
-            Text = content, AcceptsReturn = true, AcceptsTab = true,
-            Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(232, 232, 237)),
-            CaretBrush = Brushes.White, SelectionBrush = new SolidColorBrush(Color.FromRgb(85, 85, 105)),
-            BorderThickness = new Thickness(0), FontFamily = new FontFamily("Consolas"),
-            FontSize = _preferences.FontSize, TextWrapping = _preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Padding = new Thickness(14)
-        };
-        SpellCheck.SetIsEnabled(editor, false);
-        var tab = new TabItem { Header = title, Content = editor };
-        _paths[tab] = path;
-        editor.TextChanged += (_, _) => {
-            if (tab.Header is string header && !header.EndsWith("*", StringComparison.Ordinal))
-                tab.Header = header + "*";
-            StatusText.Text = "Edited • " + title;
-        };
-        EditorTabs.Items.Add(tab);
-        EditorTabs.SelectedItem = tab;
-        editor.Focus();
-    }
-
-    private bool SaveTab(TabItem tab, bool saveAs = false)
-    {
-        if (tab.Content is not TextBox editor) return false;
-        var path = _paths[tab];
-        if (saveAs || string.IsNullOrEmpty(path))
-        {
-            var dialog = new SaveFileDialog {
-                Filter = "Lua scripts (*.lua)|*.lua|Text files (*.txt)|*.txt",
-                InitialDirectory = _library,
-                FileName = (tab.Header?.ToString() ?? "Untitled.lua").TrimEnd('*')
-            };
-            if (dialog.ShowDialog(this) != true) return false;
-            path = dialog.FileName;
-        }
-        try {
-            File.WriteAllText(path!, editor.Text);
-            _paths[tab] = path;
-            tab.Header = Path.GetFileName(path);
-            StatusText.Text = "Saved • " + path;
-            RefreshLibrary();
-            return true;
-        } catch (Exception ex) {
-            MessageBox.Show(this, ex.Message, "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
-    }
-
-    private async System.Threading.Tasks.Task CheckForUpdatesSilentlyAsync()
-    {
-        if (!_preferences.AutoUpdateEnabled || _updates.PendingVersion != null) return;
-        if (await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true))
-            StatusText.Text = "Vertex X " + _updates.PendingVersion + " is downloaded — install when you exit";
-    }
-
-    private void Account_Click(object sender, RoutedEventArgs e)
-    {
-        if (_auth.AccessToken != null)
-        {
-            if (MessageBox.Show(this, "Signed in as " + (_auth.Username ?? _auth.UserId) + ". Sign out?", "Vertex X Account",
-                    MessageBoxButton.YesNo) == MessageBoxResult.Yes) { _auth.SignOut(); StatusText.Text = "Signed out"; }
-            return;
-        }
-        var dialog = new AccountWindow(_auth) { Owner = this };
-        if (dialog.ShowDialog() == true) StatusText.Text = "Connected to Zuzify Supabase • " + (_auth.Username ?? "Account");
-    }
-    private async void Updates_Click(object sender, RoutedEventArgs e)
-    {
-        if (await _updates.CheckAsync(this, quietWhenCurrent: false, automatic: false))
-            StatusText.Text = "Update " + _updates.PendingVersion + " ready — close Vertex X to install";
-    }
-    private void Roblox_Click(object sender, RoutedEventArgs e) => new RobloxWindow { Owner = this }.ShowDialog();
-
-    private sealed record ScriptFileItem(string FullPath, string Name);
-
-    private void Find_Click(object sender, RoutedEventArgs e)
-    {
-        if (ActiveEditor is { } editor)
-            new FindReplaceWindow(editor) { Owner = this }.Show();
-    }
-
-    private void Snippets_Click(object sender, RoutedEventArgs e)
-    {
-        if (ActiveEditor == null) return;
-        var menu = new ContextMenu();
-        var snippets = new (string Title, string Text)[]
-        {
-            ("Hello world", "print('Hello from Vertex X!')"),
-            ("Function", "local function greet(name)\\n    return 'Hello, ' .. name\\nend\\n\\nprint(greet('Vertex'))"),
-            ("For loop", "for index = 1, 10 do\\n    print(index)\\nend"),
-            ("Table", "local player = { name = 'Vertex', level = 1 }\\nprint(player.name)"),
-            ("Condition", "local enabled = true\\nif enabled then\\n    print('Enabled')\\nelse\\n    print('Disabled')\\nend")
-        };
-        foreach (var snippet in snippets)
-        {
-            var entry = new MenuItem { Header = snippet.Title };
-            var value = snippet.Text.Replace("\\n", Environment.NewLine);
-            entry.Click += (_, _) =>
+            Directory.CreateDirectory(_data);
+            Directory.CreateDirectory(_library);
+            try { _preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(Path.Combine(_data, "settings.json")), Json) ?? new(); } catch { }
+            try { _paths = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(_data, "documents.json"))) ?? new(); } catch { }
+            _preferences.FontSize = double.IsFinite(_preferences.FontSize) ? Math.Clamp(_preferences.FontSize, 10, 24) : 14;
+            if (Web.CoreWebView2 == null)
             {
-                if (ActiveEditor is { } target)
-                {
-                    target.SelectedText = value;
-                    target.Focus();
-                }
-            };
-            menu.Items.Add(entry);
-        }
-        menu.IsOpen = true;
-    }
-
-    private void SaveAs_Click(object sender, RoutedEventArgs e)
-    {
-        if (ActiveTab is { } tab) SaveTab(tab, saveAs: true);
-    }
-
-    private void LibraryFilter_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (LibraryList != null) RefreshLibrary();
-    }
-
-    private void New_Click(object sender, RoutedEventArgs e) => AddTab("Untitled.lua", "");
-    private void Save_Click(object sender, RoutedEventArgs e) { if (ActiveTab is { } tab) SaveTab(tab); }
-    private void Open_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog { Filter = "Lua scripts (*.lua)|*.lua|Text files (*.txt)|*.txt|All files (*.*)|*.*", Multiselect = true };
-        if (dialog.ShowDialog(this) == true) foreach (var file in dialog.FileNames) OpenFile(file);
-    }
-    private void OpenFile(string path)
-    {
-        try {
-            if (!File.Exists(path)) return;
-            var existing = _paths.FirstOrDefault(p => string.Equals(p.Value, path, StringComparison.OrdinalIgnoreCase)).Key;
-            if (existing != null) { EditorTabs.SelectedItem = existing; return; }
-            AddTab(Path.GetFileName(path), File.ReadAllText(path), path);
-        } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Open failed", MessageBoxButton.OK, MessageBoxImage.Error); }
-    }
-    private void RefreshLibrary()
-    {
-        Directory.CreateDirectory(_library);
-        var search = LibraryFilter?.Text.Trim() ?? string.Empty;
-        LibraryList.ItemsSource = Directory.EnumerateFiles(_library, "*.lua")
-            .Where(file => Path.GetFileName(file).Contains(search, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
-            .Select(file => new ScriptFileItem(file, Path.GetFileName(file)))
-            .ToArray();
-    }
-    private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshLibrary();
-    private void OpenLibrary_Click(object sender, RoutedEventArgs e)
-    {
-        Directory.CreateDirectory(_library);
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = "explorer.exe",
-            Arguments = "\"" + _library + "\"",
-            UseShellExecute = true
-        });
-    }
-    private void Library_DoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (LibraryList.SelectedItem is ScriptFileItem file) OpenFile(file.FullPath);
-    }
-    private void Run_Click(object sender, RoutedEventArgs e)
-    {
-        if (ActiveEditor is not { } editor) return;
-        ConsoleOutput.Clear();
-        try {
-            var script = new Script(CoreModules.Preset_HardSandbox);
-            script.Options.DebugPrint = line => ConsoleOutput.AppendText(line + Environment.NewLine);
-            var result = script.DoString(editor.Text);
-            if (result.Type != DataType.Void && result.Type != DataType.Nil) ConsoleOutput.AppendText("Result: " + result + Environment.NewLine);
-            StatusText.Text = "Finished • Local Lua runtime";
-        } catch (Exception ex) {
-            ConsoleOutput.AppendText("Error: " + ex.Message + Environment.NewLine);
-            StatusText.Text = "Execution error";
-        }
-    }
-    private void Clear_Click(object sender, RoutedEventArgs e) => ConsoleOutput.Clear();
-    private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ActiveTab is { } tab) StatusText.Text = "Active • " + tab.Header;
-    }
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        var options = new SettingsWindow(_preferences) { Owner = this };
-        if (options.ShowDialog() != true) return;
-        _preferences = options.Preferences;
-        foreach (var editor in EditorTabs.Items.OfType<TabItem>().Select(t => t.Content).OfType<TextBox>()) {
-            editor.FontSize = _preferences.FontSize;
-            editor.TextWrapping = _preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
-        }
-        SavePreferences();
-        if (_preferences.AutoUpdateEnabled) _ = CheckForUpdatesSilentlyAsync();
-    }
-    private void LoadPreferences()
-    {
-        try {
-            if (File.Exists(_preferencesPath))
-                _preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(_preferencesPath)) ?? new Preferences();
-            _preferences.FontSize = Math.Clamp(_preferences.FontSize, 10, 28);
-        } catch { _preferences = new Preferences(); }
-    }
-    private void SavePreferences()
-    {
-        try {
-            Directory.CreateDirectory(Path.GetDirectoryName(_preferencesPath)!);
-            File.WriteAllText(_preferencesPath, JsonSerializer.Serialize(_preferences, new JsonSerializerOptions { WriteIndented = true }));
-        } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Settings could not be saved"); }
-    }
-    private void Window_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.F5) { Run_Click(sender, new RoutedEventArgs()); e.Handled = true; return; }
-        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
-        {
-            SaveAs_Click(sender, new RoutedEventArgs());
-            e.Handled = true;
-            return;
-        }
-        if (Keyboard.Modifiers != ModifierKeys.Control) return;
-        if (e.Key == Key.N) { New_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.O) { Open_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.S) { Save_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.F || e.Key == Key.H) { Find_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.W) { CloseTab_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-    }
-
-    private bool ConfirmSave(TabItem tab)
-    {
-        if (tab.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) != true) return true;
-        EditorTabs.SelectedItem = tab;
-        var answer = MessageBox.Show(this,
-            "Save changes to " + tab.Header.ToString()!.TrimEnd('*') + " before closing?",
-            "Unsaved changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-        return answer == MessageBoxResult.No || (answer == MessageBoxResult.Yes && SaveTab(tab));
-    }
-
-    private void CloseTab_Click(object sender, RoutedEventArgs e)
-    {
-        if (ActiveTab is not { } tab || !ConfirmSave(tab)) return;
-        _paths.Remove(tab);
-        EditorTabs.Items.Remove(tab);
-        if (EditorTabs.Items.Count == 0) AddTab("Untitled.lua", "");
-    }
-
-    private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
-    {
-        foreach (var tab in EditorTabs.Items.OfType<TabItem>().ToArray())
-        {
-            if (!ConfirmSave(tab))
-            {
-                e.Cancel = true;
-                return;
+                var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_data, "WebView2"));
+                await Web.EnsureCoreWebView2Async(environment);
             }
+            var core = Web.CoreWebView2 ?? throw new InvalidOperationException("The WebView2 runtime did not initialize.");
+            core.Settings.AreHostObjectsAllowed = false;
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.AreDevToolsEnabled = false;
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.AreDefaultScriptDialogsEnabled = false;
+            core.SetVirtualHostNameToFolderMapping("vertexx.local", Path.Combine(AppContext.BaseDirectory, "ui"), CoreWebView2HostResourceAccessKind.DenyCors);
+            if (!_configured)
+            {
+            core.NavigationStarting += (_, args) => { if (!IsTrusted(args.Uri)) args.Cancel = true; };
+            core.NewWindowRequested += (_, args) => args.Handled = true;
+            core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
+            core.DownloadStarting += (_, args) => args.Cancel = true;
+            core.WebMessageReceived += WebMessageReceived;
+            core.NavigationCompleted += (_, args) =>
+            {
+                if (!args.IsSuccess) { StartupPanel.Visibility = Visibility.Visible; RetryButton.Visibility = Visibility.Visible; StartupMessage.Text = "The interface could not load. Run setup again to repair the local UI files."; return; }
+                Web.Visibility = Visibility.Visible;
+                StartupPanel.Visibility = Visibility.Collapsed;
+            };
+            _configured = true;
+            }
+            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "ui", "index.html"))) throw new FileNotFoundException("The React UI files are missing. Reinstall Vertex X.");
+            core.Navigate(Origin + "/index.html");
         }
-
-        _updateTimer.Stop();
+        catch (Exception ex)
+        {
+            StartupMessage.Text = "Vertex X could not start its interface. Run setup again to install or repair Microsoft WebView2. Internet is required if the runtime is missing.\n\n" + ex.Message;
+            RetryButton.Visibility = Visibility.Visible;
+        }
+        finally { _initializing = false; }
+    }
+    private static bool IsTrusted(string uri) => Uri.TryCreate(uri, UriKind.Absolute, out var value) && value.Scheme == "https" && value.Host == "vertexx.local" && value.IsDefaultPort;
+    private void Send(object data)
+    {
+        if (_closed) return;
+        if (Web.CoreWebView2 != null && IsTrusted(Web.Source?.AbsoluteUri ?? ""))
+            Web.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(data, Json));
+    }
+    private async void WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        if (!IsTrusted(args.Source)) return;
+        string? id = null;
+        try
+        {
+            if (args.WebMessageAsJson.Length > 7_000_000) throw new ArgumentException("Request is too large.");
+            using var doc = JsonDocument.Parse(args.WebMessageAsJson);
+            var root = doc.RootElement;
+            id = root.GetProperty("id").GetString();
+            if (id == null || id.Length > 80) throw new ArgumentException("Invalid request ID.");
+            var method = root.GetProperty("method").GetString();
+            var payload = root.TryGetProperty("payload", out var p) ? p : default;
+            var result = await HandleAsync(method ?? "", payload);
+            Send(new { id, ok = true, result });
+        }
+        catch (Exception ex) { Send(new { id, ok = false, error = ex is OperationCanceledException ? "Execution stopped." : ex.Message, output = ex.Data["VertexX.Output"] as string }); }
+    }
+    private static string Text(JsonElement p, string name, int limit = 1_000_000)
+    {
+        if (p.ValueKind != JsonValueKind.Object || !p.TryGetProperty(name, out var field) || field.ValueKind != JsonValueKind.String) throw new ArgumentException("Missing " + name + ".");
+        var text = field.GetString() ?? "";
+        if (text.Length > limit) throw new ArgumentException(name + " is too long.");
+        return text;
+    }
+    private object Account() => new { signedIn = _auth.AccessToken != null, username = _auth.Username, userId = _auth.UserId };
+    private object Document(string path)
+    {
+        var info = new FileInfo(path);
+        if (info.Length > 1_000_000) throw new IOException("Files must be smaller than 1 MB.");
+        var id = _paths.FirstOrDefault(p => string.Equals(p.Value, path, StringComparison.OrdinalIgnoreCase)).Key ?? Guid.NewGuid().ToString();
+        _paths[id] = path;
+        PersistPaths();
+        return new { id, name = Path.GetFileName(path), content = File.ReadAllText(path), saved = true };
+    }
+    private void PersistPaths() => AtomicWrite(Path.Combine(_data, "documents.json"), JsonSerializer.Serialize(_paths));
+    private static void AtomicWrite(string path, string content)
+    {
+        var temporary = path + ".tmp";
+        File.WriteAllText(temporary, content, new UTF8Encoding(false));
+        File.Move(temporary, path, true);
+    }
+    private object Library() => Directory.EnumerateFiles(_library).Where(p => new[] { ".lua", ".txt" }.Contains(Path.GetExtension(p).ToLowerInvariant())).OrderBy(Path.GetFileName).Select(p => new { name = Path.GetFileName(p), size = new FileInfo(p).Length }).ToArray();
+    private async Task<object?> HandleAsync(string method, JsonElement p)
+    {
+        switch (method)
+        {
+            case "app.ready":
+                _ready = true;
+                _closeRequested = false;
+                _timer.Start();
+                _ = AutomaticUpdateAsync();
+                return new { version = VertexUpdateService.CurrentVersion, preferences = _preferences, account = Account(), library = Library() };
+            case "app.close": _allowClose = true; Close(); return null;
+            case "app.cancelClose": _closeRequested = false; return null;
+            case "files.list": return Library();
+            case "files.folder": Process.Start(new ProcessStartInfo("explorer.exe", "\"" + _library + "\"") { UseShellExecute = true }); return null;
+            case "files.open":
+            case "files.library":
+            case "files.save":
+            {
+                if (!await _fileGate.WaitAsync(0)) throw new InvalidOperationException("Finish the current file dialog first.");
+                try
+                {
+                    if (method == "files.open")
+                    {
+                        var dialog = new OpenFileDialog { Filter = "Scripts (*.lua;*.txt)|*.lua;*.txt", Multiselect = true, InitialDirectory = _library };
+                        return dialog.ShowDialog(this) == true ? dialog.FileNames.Select(Document).ToArray() : Array.Empty<object>();
+                    }
+                    if (method == "files.library")
+                    {
+                        var name = Text(p, "name", 255);
+                        if (name != Path.GetFileName(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new ArgumentException("Invalid filename.");
+                        return Document(Path.Combine(_library, name));
+                    }
+                    var id = Text(p, "id", 80);
+                    if (!Guid.TryParse(id, out _)) throw new ArgumentException("Invalid document.");
+                    var content = Text(p, "content");
+                    _paths.TryGetValue(id, out var path);
+                    var saveAs = p.TryGetProperty("saveAs", out var sa) && sa.ValueKind == JsonValueKind.True;
+                    if (path == null || saveAs)
+                    {
+                        var name = Path.GetFileName(Text(p, "name", 255));
+                        var dialog = new SaveFileDialog { Filter = "Lua script (*.lua)|*.lua|Text file (*.txt)|*.txt", FileName = name, InitialDirectory = _library, AddExtension = true, DefaultExt = ".lua" };
+                        if (dialog.ShowDialog(this) != true) return null;
+                        path = dialog.FileName;
+                    }
+                    AtomicWrite(path, content);
+                    _paths[id] = path;
+                    PersistPaths();
+                    return new { id, name = Path.GetFileName(path), content, saved = true };
+                }
+                finally { _fileGate.Release(); }
+            }
+            case "lua.run":
+            {
+                if (_execution != null) throw new InvalidOperationException("A script is already running.");
+                var code = Text(p, "code");
+                using var cancellation = new CancellationTokenSource();
+                _execution = cancellation;
+                try { return await Task.Run(() => VertexLuaRuntime.Run(code, cancellation.Token)); }
+                finally { _execution = null; }
+            }
+            case "lua.stop": _execution?.Cancel(); return null;
+            case "settings.save":
+                var prefs = p.Deserialize<Preferences>(Json) ?? throw new ArgumentException("Invalid preferences.");
+                prefs.FontSize = double.IsFinite(prefs.FontSize) ? Math.Clamp(prefs.FontSize, 10, 24) : 14;
+                if (prefs.Accent is not ("violet" or "mint" or "ice")) prefs.Accent = "violet";
+                AtomicWrite(Path.Combine(_data, "settings.json"), JsonSerializer.Serialize(prefs, Json));
+                _preferences = prefs;
+                return _preferences;
+            case "auth.login":
+            case "auth.signup":
+            case "auth.logout":
+            {
+                if (!await _accountGate.WaitAsync(0)) throw new InvalidOperationException("An account request is already running.");
+                try
+                {
+                    if (method == "auth.logout") { _auth.SignOut(); return new { message = "Signed out.", account = Account() }; }
+                    var email = Text(p, "email", 254);
+                    var password = Text(p, "password", 1024);
+                    var message = method == "auth.login" ? await _auth.SignInAsync(email, password) : await _auth.SignUpAsync(Text(p, "username", 20), email, password);
+                    return new { message, account = Account() };
+                }
+                finally { _accountGate.Release(); }
+            }
+            case "updates.check":
+                await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true);
+                return UpdateState();
+            case "updates.page": Process.Start(new ProcessStartInfo("https://github.com/taithedev/Vertex-X/releases") { UseShellExecute = true }); return null;
+            case "roblox.lookup":
+            {
+                var username = Text(p, "username", 20).Trim();
+                if (username.Length < 3) throw new ArgumentException("Enter a Roblox username.");
+                using var body = new StringContent(JsonSerializer.Serialize(new { usernames = new[] { username }, excludeBannedUsers = true }), Encoding.UTF8, "application/json");
+                using var response = await Http.PostAsync("https://users.roblox.com/v1/usernames/users", body);
+                response.EnsureSuccessStatusCode();
+                using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var users = doc.RootElement.GetProperty("data");
+                if (users.GetArrayLength() == 0) throw new InvalidOperationException("No matching public profile found.");
+                var user = users[0];
+                return new { id = user.GetProperty("id").GetInt64(), name = user.GetProperty("name").GetString(), displayName = user.GetProperty("displayName").GetString() };
+            }
+            case "roblox.open":
+                var userId = p.GetProperty("id").GetInt64();
+                if (userId <= 0) throw new ArgumentException("Invalid profile ID.");
+                Process.Start(new ProcessStartInfo("https://www.roblox.com/users/" + userId + "/profile") { UseShellExecute = true }); return null;
+            default: throw new ArgumentException("Unknown application command.");
+        }
+    }
+    private object UpdateState() => new { version = VertexUpdateService.CurrentVersion, pendingVersion = _updates.PendingVersion, message = _updates.StatusMessage, hasError = _updates.HasError };
+    private async Task AutomaticUpdateAsync()
+    {
+        if (!_ready || !_preferences.AutoUpdateEnabled || _updates.PendingVersion != null) return;
+        await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true);
+        Send(new { type = "updates", data = UpdateState() });
+    }
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_ready && !_allowClose)
+        {
+            e.Cancel = true;
+            if (!_closeRequested) { _closeRequested = true; Send(new { type = "request-close" }); }
+            return;
+        }
+        _execution?.Cancel();
+        _timer.Stop();
         if (_updates.PendingVersion != null && !_updates.InstallPendingOnExit())
-            MessageBox.Show(this,
-                "The downloaded update could not be started. Your current version remains installed. Check Updates to retry.",
-                "Vertex X", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "The update could not start. Your current version remains installed. Use Updates to retry.", "Vertex X Updates");
+        _ready = false;
+        _closed = true;
+        Web.Dispose();
     }
 }
 public sealed class Preferences
 {
-    public double FontSize { get; set; } = 15;
+    public double FontSize { get; set; } = 14;
     public bool WordWrap { get; set; }
     public bool AutoUpdateEnabled { get; set; } = true;
+    public string Accent { get; set; } = "violet";
 }

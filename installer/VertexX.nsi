@@ -5,7 +5,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef MyAppVersion
-!define MyAppVersion "0.5.2"
+!define MyAppVersion "0.6.0"
 !endif
 !ifndef PayloadDir
 !define PayloadDir "..\publish"
@@ -23,6 +23,7 @@ VIAddVersionKey "ProductName" "Vertex X"
 VIAddVersionKey "FileDescription" "Vertex X Windows installer"
 VIAddVersionKey "FileVersion" "${MyAppVersion}"
 VIAddVersionKey "LegalCopyright" "Vertex X"
+!define MUI_WELCOMEPAGE_TEXT "Setup installs Vertex X with the .NET runtime. If Microsoft WebView2 is missing, setup installs it from Microsoft; this step requires an internet connection. Your scripts and settings are preserved during upgrades.$\r$\n$\r$\nClick Next to continue."
 !define MUI_ABORTWARNING
 !define MUI_BGCOLOR "101014"
 !define MUI_TEXTCOLOR "EEEEF2"
@@ -81,8 +82,31 @@ Function CheckApplicationClosed
   finished:
 FunctionEnd
 
+Function EnsureWebViewRuntime
+  ; Microsoft's documented per-machine (32-bit view) and per-user runtime keys.
+  SetRegView 32
+  ReadRegStr $0 HKLM "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  SetRegView 64
+  ${If} $0 == ""
+    ReadRegStr $0 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  ${If} $0 != ""
+  ${AndIf} $0 != "0.0.0.0"
+    Return
+  ${EndIf}
+  DetailPrint "Installing Microsoft WebView2. Internet connection may be required..."
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe "prerequisites\MicrosoftEdgeWebview2Setup.exe"
+  ExecWait '$\"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe$\" /silent /install' $1
+  ${If} $1 != 0
+    MessageBox MB_ICONSTOP "Microsoft WebView2 could not be installed (code $1). Connect to the internet and run setup again."
+    Abort
+  ${EndIf}
+FunctionEnd
+
 Section "Vertex X" Main
   Call CheckApplicationClosed
+  Call EnsureWebViewRuntime
   SetOutPath "$INSTDIR"
   SetOverwrite on
   ClearErrors

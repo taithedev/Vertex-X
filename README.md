@@ -1,60 +1,50 @@
 # Vertex X
 
-**Vertex X** is a native C# / WPF / .NET 8 desktop application for editing and locally running trusted Lua scripts. No Electron and no browser shell.
+A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.0 beta**.
 
-## Version
-Current source: **0.5.2 beta**. A Windows x64 installer can be compiled with NSIS. Native Windows installation and application smoke testing are still required before a stable release.
+## Workspace
 
-## Features
-- Dark OLED-themed native workspace, tabbed editor, script explorer and output console
-- Local Lua execution via MoonSharp
-- Open, save and Save As support for `.lua` files
-- Save, discard or cancel prompts when closing edited tabs or exiting; visible Close Tab button
-- Wrapping toolbar for smaller windows and exact version display
-- Find & Replace, optional case matching, and Replace All
-- Script filename search and one-click access to `Documents/Vertex X/Scripts`
-- Quick Lua snippets (hello-world, functions, loops, tables, conditions)
-- Preferences for font size, word wrap and automatic release updates
-- Supabase email/password sign-up/login and account usernames via the existing Zuzify Supabase project
-- Tables `vertexx_profiles` and `vertexx_preferences` with row-level security
-- Public Roblox profile lookup (not verified linking)
-- GitHub Releases-based update detection and SHA-256 checked installer staging
+- Dark editor-focused React UI with a searchable script explorer, starter snippets and a command palette.
+- CodeMirror editor: Lua syntax highlighting, line numbers, folding, bracket matching, undo/redo and find/replace.
+- Recoverable tabs and save/discard/cancel prompts. Recovery is stored in the app's local WebView2 profile; save important scripts to disk.
+- Native file dialogs, Save As, and scripts under `Documents/Vertex X/Scripts`.
+- Local MoonSharp Lua execution on a worker thread with Stop, a five-second cooperative time limit, and a 100 KB output cap.
+- Font size, wrap, accent color and auto-update preferences.
+- Existing Supabase email/password accounts with usernames; tokens remain in memory and all app tables use the `vertexx_` prefix.
+- Public Roblox profile lookup. It does not verify account ownership or execute scripts inside Roblox.
 
-### Keyboard shortcuts
-| Command | Shortcut |
-|---|---|
-| Run current script | F5 |
-| New tab | Ctrl+N |
-| Open file | Ctrl+O |
-| Save | Ctrl+S |
-| Save As | Ctrl+Shift+S |
-| Close tab | Ctrl+W |
-| Find and replace | Ctrl+F / Ctrl+H |
+## Build the Windows installer
 
-## Installer and GitHub Releases
+Run `Build-VertexX.cmd` on Windows. The builder installs missing .NET 8 SDK, Node.js LTS and NSIS prerequisites through winget, installs locked npm dependencies, builds React, runs the account/update/runtime checks, publishes the self-contained Windows application, and packages it with NSIS.
 
-Build the Windows installer with `Build-VertexX.cmd`; publish a beta with `Publish-VertexX-Release.cmd` after signing into GitHub CLI. No GitHub Actions are used. Build prerequisites are .NET 8 SDK and NSIS; the Windows builder can install missing tools through winget.
+Output: `installer-output/VertexX-Setup-0.6.0-x64.exe` and `SHA256SUMS.txt`.
 
-Output: `installer-output/VertexX-Setup-0.5.2-x64.exe` and `SHA256SUMS.txt`.
+The app uses Microsoft WebView2 to render bundled React assets. Setup detects the runtime and installs Microsoft's signed Evergreen bootstrapper when needed. This prerequisite needs internet if WebView2 is not installed. The Windows builder verifies the bootstrapper's Microsoft Authenticode signature. No separate .NET runtime installation is required.
 
-Setup installs the self-contained application and .NET runtime into the current user's LocalAppData, creates Start menu and desktop shortcuts, and registers an uninstaller. No separate .NET installation or administrator permission is needed. Uninstall removes the installed payload while preserving scripts in Documents and preferences in LocalAppData. Close Vertex X before running setup or uninstall.
+Setup is per-user and includes Start menu/desktop shortcuts and an uninstaller. Scripts, preferences and recovery data are preserved during upgrades and uninstall. The WebView2 runtime is shared with other apps and is not removed by Vertex X uninstall.
 
-Releases: https://github.com/taithedev/Vertex-X/releases
+## Updates and releases
 
-### Automatic updates
-When enabled, Vertex X checks the official repository's latest published compatible release (including betas) at startup and every four hours. It verifies the downloaded setup against `SHA256SUMS.txt`, then starts setup on normal exit after unsaved-script warnings. The installer waits for the exiting process before replacing files. NSIS releases use `/S /UPDATEPID=<process id>` for updates. Beta prereleases are included because Vertex X currently ships on the beta channel. Draft releases are excluded.
+Run `Publish-VertexX-Release.cmd` after signing in to GitHub CLI. No GitHub Actions are used. Publication uploads the installer and checksum as a draft before publishing a beta release, tagging the exact clean source commit used for the build.
 
-The publisher first uploads a draft with both assets and only publishes after the uploads succeed. It tags the exact committed source used for the build and refuses tracked source changes.
+Vertex X checks complete published releases, including betas, at startup and every four hours when automatic updates are enabled. Downloads are restricted to the official repository and verified against SHA-256 checksums. The update installs only after the app exits following unsaved-edit prompts. Open **Updates** to check manually or view the actual release status. Source commits alone do not create a release.
 
-### Validation
-Run `dotnet run --project tests/VertexX.AuthChecks` to exercise confirmation-required signup, immediate signup, empty profile responses, profile-conflict rollback, and rejected login. The native application can be cross-compiled on Linux using `-p:EnableWindowsTargeting=true -p:PublishSingleFile=false`; NSIS can package the resulting self-contained folder directly. `installer/VertexX-uninstall.nsh` is generated from the exact payload by the builder.
+## Development and verification
 
-The setup is unsigned. Native Windows install, launch, update, and uninstall testing remains necessary before calling this a stable release.
+React: `cd frontend`, `npm ci`, `npm run build`. `npm run dev` previews the interface; native-only actions clearly report that the installed app is needed. Run `npm run test:ui` after installing Playwright Chromium (`npx playwright install chromium`) for controlled-host browser contract checks. `BROWSER_EXECUTABLE` can select an installed browser. These checks do not execute the Windows host.
 
-### Accounts and Roblox
-Vertex X authenticates with Supabase using an email and password, and records a profile username. Passwords go through Supabase Auth, not into `vertexx_` database tables. No secret/service-role credentials are embedded in the desktop client. Roblox profile search uses public information only; it does not prove the user owns a Roblox account or run scripts inside Roblox.
+React assets are bundled offline under `ui/` by the .NET project. The renderer uses a narrow JSON command bridge; remote navigation, popups, generic shell commands and remote scripts are disabled.
 
-### Development limitations
-Roblox integration provides public profile lookup, not verified ownership linking or execution inside Roblox. Accounts currently use email and password with a profile username. Lua uses an in-process interpreter: run only trusted scripts. A compiled installer and passing account regression checks do not establish that every UI feature or automatic upgrade has passed native Windows testing.
+Run the platform-independent native checks:
 
-See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.5.2.md).
+```
+dotnet run --project tests/VertexX.AuthChecks
+dotnet run --project tests/VertexX.UpdateChecks
+dotnet run --project tests/VertexX.RuntimeChecks
+```
+
+The WPF application can be cross-compiled on Linux with `-p:EnableWindowsTargeting=true -p:PublishSingleFile=false` after building React. Windows install, WebView2 initialization, dialogs, real account login, update installation and uninstall still require native Windows testing. A passing cross-build or a browser test with a controlled host does not replace those checks. The installer is unsigned.
+
+Run only trusted Lua. The in-process interpreter is not a secure memory/process isolation boundary, even with cooperative execution limits.
+
+See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.6.0.md).

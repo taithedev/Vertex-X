@@ -9,3 +9,8 @@ TestResults/
 publish-folder/
 installer-output/
 installer/VertexX-uninstall.nsh
+
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+installer/prerequisites/

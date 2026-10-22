@@ -1,56 +1,54 @@
 # Vertex X
 
-A **native Windows** Lua development application, written in C# / WPF / .NET 8. No Electron.
+**Vertex X** is a native C# / WPF / .NET 8 desktop application for editing and locally running trusted Lua scripts. No Electron and no browser shell.
 
-## What it does
-- Dark desktop UI, tabs, Lua editor, local library, console
-- Supabase email/password login and Vertex X usernames
-- Separate Zuzify project tables named `vertexx_profiles` and `vertexx_preferences`, both with row-level security
-- Roblox **public profile lookup** only (not verified account connection)
-- GitHub Releases based updates, with SHA-256 validation, caching and install-on-exit
-- Dark, per-user Inno Setup installer with shortcuts and uninstall support
+## Version
+Current source: **0.5.0 beta**. Windows installer build is **not yet independently verified**.
 
-## Installer downloads (GitHub Releases, not Actions)
-**Official Releases:** https://github.com/taithedev/Vertex-X/releases
+## Features
+- Dark OLED-themed native workspace, tabbed editor, script explorer and output console
+- Local Lua execution via MoonSharp
+- Open, save and Save As support for `.lua` files
+- Find & Replace, optional case matching, and Replace All
+- Script filename search and one-click access to `Documents/Vertex X/Scripts`
+- Quick Lua snippets (hello-world, functions, loops, tables, conditions)
+- Preferences for font size, word wrap and automatic release updates
+- Supabase email/password sign-up/login and account usernames via the existing Zuzify Supabase project
+- Tables `vertexx_profiles` and `vertexx_preferences` with row-level security
+- Public Roblox profile lookup (not verified linking)
+- GitHub Releases-based update detection and SHA-256 checked installer staging
 
-Each *published* release should contain:
-- `VertexX-Setup-VERSION-x64.exe`
-- `SHA256SUMS.txt`
+### Keyboard shortcuts
+| Command | Shortcut |
+|---|---|
+| Run current script | F5 |
+| New tab | Ctrl+N |
+| Open file | Ctrl+O |
+| Save | Ctrl+S |
+| Save As | Ctrl+Shift+S |
+| Close tab | Ctrl+W |
+| Find and replace | Ctrl+F / Ctrl+H |
 
-If that page has no EXE, no finished installer has been published. **GitHub Releases stores files; it does not compile the Windows application.** We do not use GitHub Actions for Vertex X.
+## Installer: GitHub Releases, not GitHub Actions
 
-### Build and publish an actual installer on Windows
-Download the full repository ZIP, extract it, and double-click `Build-VertexX.cmd`. This invokes `tools/Build-VertexX.ps1` and installs the missing .NET 8 SDK and Inno Setup via winget where supported.
+Releases page: https://github.com/taithedev/Vertex-X/releases
 
-After a successful build, the native installer is at:
+The desired distributable is **`VertexX-Setup-0.5.0-x64.exe`**, plus `SHA256SUMS.txt`. Those are **not stored in source** and **do not exist until an actual Windows compilation and Inno Setup packaging run succeeds**. This repository intentionally has **no GitHub Actions workflow**.
 
-```text
-installer-output\VertexX-Setup-0.4.2-x64.exe
-```
+### Build and publish
+A maintainer with a Windows build environment can download the repository and run `Build-VertexX.cmd`. The script installs needed build tools through winget where available, validates the XAML structure, publishes a self-contained win-x64 binary, and compiles the dark Inno Setup installer. It saves the finished EXE to `installer-output\VertexX-Setup-0.5.0-x64.exe`.
 
-The build produces an executable, not a builder ZIP. To publish the installer and checksum to **GitHub Releases**, run `gh auth login` once and double-click `Publish-VertexX-Release.cmd`. It builds again, verifies its output, and creates `v0.4.2` with the EXE and SHA-256 checksum file. For later releases, use:
+To publish to Releases, sign in using `gh auth login`, then run `Publish-VertexX-Release.cmd`. It calls the builder and publishes the version-tagged EXE and checksum using GitHub CLI. No GitHub Actions required. A separate trusted Windows build service could run these same commands.
 
-```powershell
-.\tools\Build-VertexX.ps1 -Version 0.4.3 -Publish
-```
+### Automatic updates
+When enabled, Vertex X checks the official repository's latest stable GitHub Release at startup and every four hours. For a version newer than the installed program, it downloads the named setup EXE and checksum file, validates SHA-256, and stages it in local application data. The app starts the installer only after closing normally and honoring unsaved-script warnings. Installer upgrades share the same app ID and location. User scripts in Documents and settings in LocalAppData are outside the installation payload.
 
-Each new version must increment. You need Windows to compile native WPF + Inno Setup; GitHub Releases alone does not do this.
+**Security note:** A SHA-256 checksum distributed alongside the same release detects download corruption but is not a substitute for publisher code signing. For use outside your own machines, sign installer releases and validate updates on a Windows test machine.
 
-## How updates work
-1. The app checks stable GitHub Releases at startup and every four hours (enabled by default, configurable under Settings).
-2. If a newer version exists, it downloads the official `VertexX-Setup-VERSION-x64.exe` and `SHA256SUMS.txt`.
-3. It checks file size and SHA-256 before staging the EXE to the current user's local application data.
-4. When Vertex X **exits normally**, after the unsaved-script warning if needed, the staged EXE starts in Inno Setup's silent progress mode. It uses the existing AppId, installation directory and per-user install policy. Installed files are updated; Documents scripts and local account preferences are not part of the setup payload.
-5. If the update cannot be verified, it is rejected, leaving the installed version intact.
+### Accounts and Roblox
+Vertex X authenticates with Supabase using an email and password, and records a profile username. Passwords go through Supabase Auth, not into `vertexx_` database tables. No secret/service-role credentials are embedded in the desktop client. Roblox profile search uses public information only; it does not prove the user owns a Roblox account or run scripts inside Roblox.
 
-The Updates button can check manually, even when automatic checking is off. Turning automatic updates off prevents background checks; an update explicitly staged through the Updates button still installs on exit.
+### Development limitations
+The native project and installer are source changes only until a Windows compiler and installer have successfully built them. There is no usable `.exe` attached to the repository yet. Lua execution uses an in-process interpreter; only use scripts you trust. No Roblox injection or security bypass functionality is included.
 
-### Limitations and security
-- **The Windows build and installer have not been executed or verified in this environment.** Validate on a Windows machine before sharing widely.
-- The installer is **not code-signed**. Windows may warn about an unknown publisher; signing is recommended before widespread distribution.
-- SHA-256 verifies consistency with the release's checksum, but does not replace publisher code signing.
-- Lua scripts run in the app process; the restricted MoonSharp preset is not a hardened sandbox. Run only scripts you trust.
-- Your email and password are handled through Supabase Auth; passwords are not written to `vertexx_` tables.
-- There is no code injection into the Roblox client or anti-cheat bypass.
-
-For integration setup details, see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+For details, see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) and [v0.5 release notes](docs/RELEASE_NOTES_0.5.0.md).

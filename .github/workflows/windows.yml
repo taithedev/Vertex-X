@@ -1,0 +1,26 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore VertexX/VertexX.csproj
+      - name: Build
+        run: dotnet build VertexX/VertexX.csproj -c Release --no-restore
+      - name: Publish Windows x64
+        run: dotnet publish VertexX/VertexX.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VertexX-Windows-x64
+          path: publish/

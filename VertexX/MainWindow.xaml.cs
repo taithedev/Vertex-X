@@ -44,8 +44,9 @@ public partial class MainWindow : Window
             BorderThickness = new Thickness(0), FontFamily = new FontFamily("Consolas"),
             FontSize = _preferences.FontSize, TextWrapping = _preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Padding = new Thickness(14), SpellCheck = { IsEnabled = false }
+            Padding = new Thickness(14)
         };
+        SpellCheck.SetIsEnabled(editor, false);
         var tab = new TabItem { Header = title, Content = editor };
         _paths[tab] = path;
         editor.TextChanged += (_, _) => {

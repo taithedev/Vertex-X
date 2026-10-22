@@ -3,8 +3,9 @@ Unicode true
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
+!include "WinVer.nsh"
 !ifndef MyAppVersion
-!define MyAppVersion "0.5.0"
+!define MyAppVersion "0.5.1"
 !endif
 !ifndef PayloadDir
 !define PayloadDir "..\publish"
@@ -39,6 +40,10 @@ VIAddVersionKey "LegalCopyright" "Vertex X"
 Function .onInit
   ${IfNot} ${RunningX64}
     MessageBox MB_ICONSTOP "Vertex X requires 64-bit Windows 10 or newer."
+    Abort
+  ${EndIf}
+  ${IfNot} ${AtLeastWin10}
+    MessageBox MB_ICONSTOP "Vertex X requires Windows 10 or newer."
     Abort
   ${EndIf}
   SetRegView 64
@@ -107,7 +112,20 @@ Function un.onInit
   SetShellVarContext current
 FunctionEnd
 
+Function un.CheckApplicationClosed
+  IfFileExists "$INSTDIR\VertexX.exe" 0 finished
+  retry:
+  System::Call 'kernel32::CreateFileW(w "$INSTDIR\VertexX.exe", i 0x40000000, i 0, p 0, i 3, i 0, p 0) p.r0'
+  ${If} $0 == -1
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Close Vertex X before uninstalling, then click Retry." /SD IDCANCEL IDRETRY retry
+    Abort
+  ${EndIf}
+  System::Call 'kernel32::CloseHandle(p r0)'
+  finished:
+FunctionEnd
+
 Section "Uninstall"
+  Call un.CheckApplicationClosed
   ; Remove only files from the installed payload; never remove scripts/settings.
   !include "VertexX-uninstall.nsh"
   Delete "$INSTDIR\Uninstall.exe"

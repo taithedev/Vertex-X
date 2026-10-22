@@ -19,7 +19,7 @@ namespace VertexX;
 /// </summary>
 public sealed class VertexUpdateService
 {
-    private const string ApiUrl = "https://api.github.com/repos/taithedev/Vertex-X/releases/latest";
+    private const string ApiUrl = "https://api.github.com/repos/taithedev/Vertex-X/releases?per_page=100";
     private const long MaximumInstallerBytes = 300_000_000;
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(6) };
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -27,7 +27,7 @@ public sealed class VertexUpdateService
     private string? _pendingHash;
 
     public static string CurrentVersion =>
-        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.5.0";
+        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.5.1";
 
     public string? PendingVersion { get; private set; }
 
@@ -44,24 +44,22 @@ public sealed class VertexUpdateService
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 if (!quietWhenCurrent)
-                    MessageBox.Show(owner, "Vertex X has no published stable release yet.", "Vertex X Updates");
+                    MessageBox.Show(owner, "Vertex X has no published release yet.", "Vertex X Updates");
                 return false;
             }
 
             response.EnsureSuccessStatusCode();
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var release = json.RootElement;
-            if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean()) return false;
-            if (release.TryGetProperty("prerelease", out var prerelease) && prerelease.GetBoolean()) return false;
-
-            var tag = release.GetProperty("tag_name").GetString() ?? "";
-            if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest) ||
-                !Version.TryParse(CurrentVersion, out var current))
+            var release = VertexRelease.SelectLatest(json.RootElement);
+            if (release == null)
             {
-                if (!quietWhenCurrent) MessageBox.Show(owner, "The release version is invalid.", "Vertex X Updates");
+                if (!quietWhenCurrent)
+                    MessageBox.Show(owner, "Vertex X has no compatible published release yet.", "Vertex X Updates");
                 return false;
             }
-
+            var selected = release.Value;
+            var latest = VertexRelease.ParseVersion(selected.GetProperty("tag_name").GetString())!;
+            var current = Version.Parse(CurrentVersion);
             if (latest <= current)
             {
                 if (!quietWhenCurrent)
@@ -78,7 +76,7 @@ public sealed class VertexUpdateService
             }
 
             var fileName = "VertexX-Setup-" + version + "-x64.exe";
-            var assets = release.GetProperty("assets").EnumerateArray().ToArray();
+            var assets = selected.GetProperty("assets").EnumerateArray().ToArray();
             var setupAsset = assets.FirstOrDefault(a =>
                 a.GetProperty("name").GetString()?.Equals(fileName, StringComparison.OrdinalIgnoreCase) == true);
             var sumsAsset = assets.FirstOrDefault(a =>

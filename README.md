@@ -3,7 +3,7 @@
 **Vertex X** is a native C# / WPF / .NET 8 desktop application for editing and locally running trusted Lua scripts. No Electron and no browser shell.
 
 ## Version
-Current source: **0.5.0 beta**. A Windows x64 installer can be compiled with NSIS. Native Windows installation and application smoke testing are still required before a stable release.
+Current source: **0.5.1 beta**. A Windows x64 installer can be compiled with NSIS. Native Windows installation and application smoke testing are still required before a stable release.
 
 ## Features
 - Dark OLED-themed native workspace, tabbed editor, script explorer and output console
@@ -33,14 +33,14 @@ Current source: **0.5.0 beta**. A Windows x64 installer can be compiled with NSI
 
 Build the Windows installer with `Build-VertexX.cmd`; publish a beta with `Publish-VertexX-Release.cmd` after signing into GitHub CLI. No GitHub Actions are used. Build prerequisites are .NET 8 SDK and NSIS; the Windows builder can install missing tools through winget.
 
-Output: `installer-output/VertexX-Setup-0.5.0-x64.exe` and `SHA256SUMS.txt`.
+Output: `installer-output/VertexX-Setup-0.5.1-x64.exe` and `SHA256SUMS.txt`.
 
 Setup installs the self-contained application and .NET runtime into the current user's LocalAppData, creates Start menu and desktop shortcuts, and registers an uninstaller. No separate .NET installation or administrator permission is needed. Uninstall removes the installed payload while preserving scripts in Documents and preferences in LocalAppData. Close Vertex X before running setup or uninstall.
 
 Releases: https://github.com/taithedev/Vertex-X/releases
 
 ### Automatic updates
-When enabled, Vertex X checks the official repository's latest **stable** release at startup and every four hours. It verifies the downloaded setup against `SHA256SUMS.txt`, then starts setup on normal exit after unsaved-script warnings. The installer waits for the exiting process before replacing files. NSIS releases use `/S /UPDATEPID=<process id>` for updates. Beta prereleases are available for manual installation and are deliberately excluded from stable update checks.
+When enabled, Vertex X checks the official repository's latest published compatible release (including betas) at startup and every four hours. It verifies the downloaded setup against `SHA256SUMS.txt`, then starts setup on normal exit after unsaved-script warnings. The installer waits for the exiting process before replacing files. NSIS releases use `/S /UPDATEPID=<process id>` for updates. Beta prereleases are included because Vertex X currently ships on the beta channel. Draft releases are excluded.
 
 The publisher first uploads a draft with both assets and only publishes after the uploads succeed. It tags the exact committed source used for the build and refuses tracked source changes.
 
@@ -55,4 +55,4 @@ Vertex X authenticates with Supabase using an email and password, and records a 
 ### Development limitations
 Roblox integration provides public profile lookup, not verified ownership linking or execution inside Roblox. Accounts currently use email and password with a profile username. Lua uses an in-process interpreter: run only trusted scripts. A compiled installer and passing account regression checks do not establish that every UI feature or automatic upgrade has passed native Windows testing.
 
-See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.5.0.md).
+See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.5.1.md).

@@ -18,6 +18,8 @@ public partial class MainWindow : Window
     private readonly string _preferencesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VertexX", "settings.json");
     private readonly Dictionary<TabItem, string?> _paths = new();
     private Preferences _preferences = new();
+    private readonly VertexAuthService _auth = new();
+    private readonly VertexUpdateService _updates = new();
 
     public MainWindow()
     {
@@ -27,6 +29,7 @@ public partial class MainWindow : Window
         AddTab("Untitled.lua", "print('Welcome to Vertex X!')\n");
         RefreshLibrary();
         StatusText.Text = "Ready • Scripts: " + _library;
+        Loaded += async (_, _) => await _updates.CheckAsync(this, true);
     }
 
     private TextBox? ActiveEditor => (EditorTabs.SelectedItem as TabItem)?.Content as TextBox;
@@ -82,6 +85,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Account_Click(object sender, RoutedEventArgs e)
+    {
+        if (_auth.AccessToken != null)
+        {
+            if (MessageBox.Show(this, "Signed in as " + (_auth.Username ?? _auth.UserId) + ". Sign out?", "Vertex X Account",
+                    MessageBoxButton.YesNo) == MessageBoxResult.Yes) { _auth.SignOut(); StatusText.Text = "Signed out"; }
+            return;
+        }
+        var dialog = new AccountWindow(_auth) { Owner = this };
+        if (dialog.ShowDialog() == true) StatusText.Text = "Connected to Zuzify Supabase • " + (_auth.Username ?? "Account");
+    }
+    private async void Updates_Click(object sender, RoutedEventArgs e) => await _updates.CheckAsync(this, false);
+    private void Roblox_Click(object sender, RoutedEventArgs e) => new RobloxWindow { Owner = this }.ShowDialog();
     private void New_Click(object sender, RoutedEventArgs e) => AddTab("Untitled.lua", "");
     private void Save_Click(object sender, RoutedEventArgs e) { if (ActiveTab is { } tab) SaveTab(tab); }
     private void Open_Click(object sender, RoutedEventArgs e)

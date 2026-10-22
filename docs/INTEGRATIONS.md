@@ -13,17 +13,21 @@ Click Account, provide a username (3-20 letters/digits/underscores), a real emai
 The username is stored as account metadata until the profile is created after confirmed sign-in. A database unique constraint prevents duplicate profile usernames.
 
 ## Updates and installer
-When Vertex X starts, it checks the public GitHub Releases API once for a newer stable release. It also has a manual Updates button. If a newer version exists, it asks permission before opening the official GitHub installer download URL. It never silently executes downloaded programs. GitHub-hosted setup downloads may require Windows SmartScreen confirmation because the installer is unsigned.
+GitHub Actions is **not used**. On a Windows PC, extract the repository ZIP and double-click Build-VertexX.cmd. It builds a self-contained C# WPF app and a native Inno Setup installer (0.4.1) with the dark Vertex X interface, shortcuts, and uninstall entry. The installer uses the same AppId for future upgrades.
 
-`.github/workflows/windows.yml` compiles the native Windows build on every push and pull request and creates download artifacts. Pushing a semver tag, e.g. `v0.4.0`, triggers the same build and then publishes the installer, SHA256 checksum, and automatically generated release notes in GitHub Releases. Version tags must be created by a maintainer after the build is verified.
+The resulting files are in installer-output/:
+- VertexX-Setup-0.4.1-x64.exe
+- SHA256SUMS.txt
 
-There is no signed installer available until GitHub Actions builds successfully. A portable and setup ZIP should be accessible on the Actions page for successful runs.
+Once the installer has been built, sign in with GitHub CLI (gh auth login) and double-click Publish-VertexX-Release.cmd to publish it directly to the official GitHub Releases page. Creating a Release is an explicit action under the repository maintainer's account. Releases distribute built executables but do not compile source code themselves.
+
+On launch, Vertex X checks the latest stable GitHub Release. If newer, it offers to download the installer and checksum, verifies SHA256 and asks again before opening setup. This is consent-based updating, not a silent update service. The setup executable is unsigned, so Windows SmartScreen may display an unknown-publisher warning.
 
 ## Roblox
 Roblox panel looks up **public profiles** using the public Roblox Users API. It does not verify ownership or associate profiles with authenticated Vertex X accounts. True account connection requires a Roblox OAuth application with PKCE, explicit user consent, a redirect URL and validation of the signed-in user ID. No Roblox passwords should be entered into Vertex X, and there is no script injection or anti-cheat bypass.
 
 ## Build prerequisites
-Windows x64, .NET 8 SDK, Inno Setup 6.6+. See the README and Windows Actions workflow.
+Windows x64, .NET 8 SDK, Inno Setup 6.7+, and optional GitHub CLI for publishing. See the README and Build-VertexX.cmd.
 
 ## Current limitations
-Windows build has not been compiled locally in this workspace. No successful GitHub Actions job, installer execution, account signup or Roblox API request has been independently verified yet. Local script execution is not a hardened sandbox; do not run untrusted Lua scripts.
+Previous Windows CI logs showed C# compiled but the old Inno script failed on an unsupported color property. That property has been removed, but the repaired installer and updater have not yet been compiled or tested end-to-end on Windows. Local script execution is not a hardened sandbox; do not run untrusted Lua scripts.

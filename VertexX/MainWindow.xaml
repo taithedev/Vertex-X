@@ -68,7 +68,7 @@
      </StackPanel>
      <Border BorderBrush="#414149" BorderThickness="1" CornerRadius="5"
       Margin="16,0,0,0" Padding="7,3" VerticalAlignment="Center">
-      <TextBlock Text="BETA 0.3" FontSize="9" Foreground="#A7A7B0"/>
+      <TextBlock Text="BETA 0.4" FontSize="9" Foreground="#A7A7B0"/>
      </Border>
     </StackPanel>
     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -77,6 +77,9 @@
      <Button Content="Save" Click="Save_Click"/>
      <Button Content="▶  Execute" Click="Run_Click" Background="#E5E5EB"
       Foreground="#101014" FontWeight="SemiBold"/>
+     <Button Content="Account" Click="Account_Click"/>
+     <Button Content="Roblox" Click="Roblox_Click"/>
+     <Button Content="Updates" Click="Updates_Click"/>
      <Button Content="⚙" Click="Settings_Click" Margin="0" FontSize="17" Padding="13,6"/>
     </StackPanel>
    </Grid>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -192,6 +193,16 @@ public partial class MainWindow : Window
             .ToArray();
     }
     private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshLibrary();
+    private void OpenLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(_library);
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = "\"" + _library + "\"",
+            UseShellExecute = true
+        });
+    }
     private void Library_DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (LibraryList.SelectedItem is ScriptFileItem file) OpenFile(file.FullPath);

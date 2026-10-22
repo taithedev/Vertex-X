@@ -15,7 +15,7 @@ InstallDir "$LOCALAPPDATA\Programs\Vertex X"
 InstallDirRegKey HKCU "Software\VertexX" "InstallDir"
 RequestExecutionLevel user
 ManifestDPIAware true
-SetCompressor /SOLID zlib
+SetCompressor zlib
 BrandingText "Vertex X"
 VIProductVersion "${MyAppVersion}.0"
 VIAddVersionKey "ProductName" "Vertex X"

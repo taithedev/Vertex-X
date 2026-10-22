@@ -64,7 +64,7 @@ Write-Host "Building Vertex X $Version for Windows x64..." -ForegroundColor Cyan
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 & $dotnet.Source restore $project
 if ($LASTEXITCODE -ne 0) { throw 'dotnet restore failed.' }
-$arguments = @('publish', $project, '--no-restore', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', "-p:Version=$Version", '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-o', $publishDir)
+$arguments = @('publish', $project, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', "-p:Version=$Version", '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-o', $publishDir)
 & $dotnet.Source @arguments
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 if (!(Test-Path (Join-Path $publishDir 'VertexX.exe'))) { throw 'VertexX.exe was not produced.' }

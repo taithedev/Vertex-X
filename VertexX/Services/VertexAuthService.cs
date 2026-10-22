@@ -14,7 +14,10 @@ public sealed class VertexAuthService
 {
     private const string BaseUrl = "https://wfqudstuncdldsvxqveu.supabase.co";
     private const string PublishableKey = "sb_publishable_LsAzcgmeAp3fBCtdU6eQzw_u5PPJjar";
-    private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private readonly HttpClient Client;
+    public VertexAuthService() : this(DefaultClient) { }
+    internal VertexAuthService(HttpClient client) { Client = client; }
     public string? AccessToken { get; private set; }
     public string? UserId { get; private set; }
     public string? Username { get; private set; }
@@ -27,7 +30,7 @@ public sealed class VertexAuthService
         return message;
     }
 
-    private static async Task<JsonDocument> SendAsync(HttpRequestMessage request)
+    private async Task<JsonDocument> SendAsync(HttpRequestMessage request)
     {
         using (request)
         using (var response = await Client.SendAsync(request))
@@ -43,7 +46,8 @@ public sealed class VertexAuthService
                 } catch { }
                 throw new InvalidOperationException(error);
             }
-            return JsonDocument.Parse(body);
+            // PostgREST return=minimal succeeds with an empty body (201/204).
+            return JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
         }
     }
 
@@ -60,14 +64,18 @@ public sealed class VertexAuthService
         }), Encoding.UTF8, "application/json");
         using var result = await SendAsync(request);
         var root = result.RootElement;
-        if (!root.TryGetProperty("user", out var user) || user.ValueKind != JsonValueKind.Object)
+        // Confirmation-required signup returns the user directly; an immediate
+        // session returns { user, access_token, ... }.
+        var user = root.TryGetProperty("user", out var nestedUser) ? nestedUser : root;
+        if (user.ValueKind != JsonValueKind.Object || !user.TryGetProperty("id", out _))
             throw new InvalidOperationException("Signup did not return a user.");
         if (root.TryGetProperty("access_token", out var token) && token.ValueKind == JsonValueKind.String)
         {
             AccessToken = token.GetString();
             UserId = user.GetProperty("id").GetString();
             Username = username;
-            await EnsureProfileAsync(username);
+            try { await EnsureProfileAsync(username); }
+            catch { SignOut(); throw; }
             return "Account created and signed in.";
         }
         return "Account registered. Verify your email, then sign in to complete your profile.";
@@ -75,6 +83,7 @@ public sealed class VertexAuthService
 
     public async Task<string> SignInAsync(string email, string password)
     {
+        SignOut();
         using var request = Request(HttpMethod.Post, "/auth/v1/token?grant_type=password");
         request.Content = new StringContent(JsonSerializer.Serialize(new { email = email.Trim(), password }), Encoding.UTF8, "application/json");
         using var result = await SendAsync(request);
@@ -84,7 +93,11 @@ public sealed class VertexAuthService
         UserId = user.GetProperty("id").GetString();
         if (user.TryGetProperty("user_metadata", out var meta) && meta.TryGetProperty("vertexx_username", out var name))
             Username = name.GetString();
-        if (!string.IsNullOrWhiteSpace(Username)) await EnsureProfileAsync(Username);
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(Username)) await EnsureProfileAsync(Username);
+        }
+        catch { SignOut(); throw; }
         return "Signed in as " + (Username ?? email);
     }
 

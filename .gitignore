@@ -6,3 +6,6 @@ obj/
 publish/
 TestResults/
 *.log
+publish-folder/
+installer-output/
+installer/VertexX-uninstall.nsh

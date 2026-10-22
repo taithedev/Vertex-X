@@ -1,33 +1,20 @@
-# Vertex X 0.4 — Accounts, Releases, Roblox
+# Vertex X integrations
 
-## Supabase connection
-Existing Zuzify project: `wfqudstuncdldsvxqveu`. The desktop client embeds **only the public publishable key**. All Vertex X tables start with `vertexx_`:
-- `public.vertexx_profiles`: user ID, unique username, optional display name, Roblox fields reserved for future verified OAuth linking.
-- `public.vertexx_preferences`: one row per user.
+## Supabase
+The native client uses the existing Zuzify project `wfqudstuncdldsvxqveu` and its active public publishable key. It embeds no secret or service-role key. App tables are `vertexx_profiles` and `vertexx_preferences`. Both have RLS enabled, and authenticated users have SELECT, INSERT, and UPDATE access only to their own rows. No database schema changes were needed for this installer update.
 
-Both tables have RLS enabled. Auth uses Supabase's managed `auth.users` service (managed system name, not a newly created Vertex X table), which handles password hashing. Database schema changes are maintained in the project's Supabase migration history.
+Supabase Auth owns password hashing. Signup takes a profile username, email, and password. Confirmation-required responses and immediate sessions are handled separately. Profile upserts accept empty success responses, and a failed profile operation clears the partial local session. Access tokens are held only in memory. Preferences currently save locally; the database preferences table is reserved for future cloud synchronization.
 
-## Creating an account
-Click Account, provide a username (3-20 letters/digits/underscores), a real email address and password (8+ characters). Email is required to log in and recover access; **username-only authentication is not implemented yet**. If email confirmation is enabled, verify the link first and then sign in. Passwords and tokens are never saved in local settings; the access token is held in memory only during the app session. Sign out from the Account button.
+## Installer and release publishing
+The default installer is now NSIS (`installer/VertexX.nsi`). The older Inno Setup script is retained as a historical alternative and is not used by the builder. The runtime is included in the installation folder. The generated uninstall manifest lists only files from the built payload, preserving unrelated user files.
 
-The username is stored as account metadata until the profile is created after confirmed sign-in. A database unique constraint prevents duplicate profile usernames.
+`Build-VertexX.cmd` builds the app, runs account regression checks, packages setup, and writes SHA256SUMS.txt. `Publish-VertexX-Release.cmd` requires a committed Git checkout and authenticated GitHub CLI, uploads a draft beta containing both assets, then publishes it. No GitHub Actions are used.
 
-## Updates and installer
-GitHub Actions is **not used**. On a Windows PC, extract the repository ZIP and double-click Build-VertexX.cmd. It builds a self-contained C# WPF app and a native Inno Setup installer (0.4.1) with the dark Vertex X interface, shortcuts, and uninstall entry. The installer uses the same AppId for future upgrades.
-
-The resulting files are in installer-output/:
-- VertexX-Setup-0.4.1-x64.exe
-- SHA256SUMS.txt
-
-Once the installer has been built, sign in with GitHub CLI (gh auth login) and double-click Publish-VertexX-Release.cmd to publish it directly to the official GitHub Releases page. Creating a Release is an explicit action under the repository maintainer's account. Releases distribute built executables but do not compile source code themselves.
-
-On launch, Vertex X checks the latest stable GitHub Release. If newer, it offers to download the installer and checksum, verifies SHA256 and asks again before opening setup. This is consent-based updating, not a silent update service. The setup executable is unsigned, so Windows SmartScreen may display an unknown-publisher warning.
+## Updates
+The client checks official stable GitHub Releases. It verifies the expected installer filename, release download origin, maximum download size, and SHA-256 hash. Updates install on normal exit using NSIS `/S /UPDATEPID=<pid>`. Setup waits up to 30 seconds for that process. Beta prereleases are installed manually until native Windows checks support stable promotion. Checksums detect corruption; these builds are unsigned.
 
 ## Roblox
-Roblox panel looks up **public profiles** using the public Roblox Users API. It does not verify ownership or associate profiles with authenticated Vertex X accounts. True account connection requires a Roblox OAuth application with PKCE, explicit user consent, a redirect URL and validation of the signed-in user ID. No Roblox passwords should be entered into Vertex X, and there is no script injection or anti-cheat bypass.
+Public profile lookup uses Roblox's public API. It does not verify account ownership. Verified linking requires a separately configured Roblox OAuth application. Vertex X never asks for a Roblox password and does not inject scripts into Roblox.
 
-## Build prerequisites
-Windows x64, .NET 8 SDK, Inno Setup 6.7+, and optional GitHub CLI for publishing. See the README and Build-VertexX.cmd.
-
-## Current limitations
-Previous Windows CI logs showed C# compiled but the old Inno script failed on an unsupported color property. That property has been removed, but the repaired installer and updater have not yet been compiled or tested end-to-end on Windows. Local script execution is not a hardened sandbox; do not run untrusted Lua scripts.
+## Verification boundary
+The application and installer are built and inspected in a Linux environment. Account HTTP response handling has regression coverage, and the live Supabase Auth endpoint and database permissions were checked. Windows UI execution, live user signup with email confirmation, and a complete native Windows upgrade cycle remain unverified. The environment blocks Wine's required Unix socket, so Wine execution cannot substitute for those tests here.

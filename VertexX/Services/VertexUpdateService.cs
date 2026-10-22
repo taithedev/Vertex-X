@@ -176,12 +176,11 @@ public sealed class VertexUpdateService
             var actual = Convert.ToHexString(SHA256.HashData(stream));
             if (!actual.Equals(hash, StringComparison.OrdinalIgnoreCase)) return false;
 
-            // Installer uses the same AppId and per-user directory as the original install.
-            // Inno Setup waits for the exiting application's files to become available.
+            // NSIS waits for this exact process before replacing the per-user install.
             Process.Start(new ProcessStartInfo
             {
                 FileName = setup,
-                Arguments = "/SILENT /NORESTART /NORESTARTAPPLICATIONS /CLOSEAPPLICATIONS /SP-",
+                Arguments = "/S /UPDATEPID=" + Environment.ProcessId,
                 UseShellExecute = true
             });
             _pendingSetup = null;

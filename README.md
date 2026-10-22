@@ -3,7 +3,7 @@
 **Vertex X** is a native C# / WPF / .NET 8 desktop application for editing and locally running trusted Lua scripts. No Electron and no browser shell.
 
 ## Version
-Current source: **0.5.0 beta**. Windows installer build is **not yet independently verified**.
+Current source: **0.5.0 beta**. A Windows x64 installer can be compiled with NSIS. Native Windows installation and application smoke testing are still required before a stable release.
 
 ## Features
 - Dark OLED-themed native workspace, tabbed editor, script explorer and output console
@@ -29,26 +29,30 @@ Current source: **0.5.0 beta**. Windows installer build is **not yet independent
 | Close tab | Ctrl+W |
 | Find and replace | Ctrl+F / Ctrl+H |
 
-## Installer: GitHub Releases, not GitHub Actions
+## Installer and GitHub Releases
 
-Releases page: https://github.com/taithedev/Vertex-X/releases
+Build the Windows installer with `Build-VertexX.cmd`; publish a beta with `Publish-VertexX-Release.cmd` after signing into GitHub CLI. No GitHub Actions are used. Build prerequisites are .NET 8 SDK and NSIS; the Windows builder can install missing tools through winget.
 
-The desired distributable is **`VertexX-Setup-0.5.0-x64.exe`**, plus `SHA256SUMS.txt`. Those are **not stored in source** and **do not exist until an actual Windows compilation and Inno Setup packaging run succeeds**. This repository intentionally has **no GitHub Actions workflow**.
+Output: `installer-output/VertexX-Setup-0.5.0-x64.exe` and `SHA256SUMS.txt`.
 
-### Build and publish
-A maintainer with a Windows build environment can download the repository and run `Build-VertexX.cmd`. The script installs needed build tools through winget where available, validates the XAML structure, publishes a self-contained win-x64 binary, and compiles the dark Inno Setup installer. It saves the finished EXE to `installer-output\VertexX-Setup-0.5.0-x64.exe`.
+Setup installs the self-contained application and .NET runtime into the current user's LocalAppData, creates Start menu and desktop shortcuts, and registers an uninstaller. No separate .NET installation or administrator permission is needed. Uninstall removes the installed payload while preserving scripts in Documents and preferences in LocalAppData. Close Vertex X before running setup or uninstall.
 
-To publish to Releases, sign in using `gh auth login`, then run `Publish-VertexX-Release.cmd`. It calls the builder and publishes the version-tagged EXE and checksum using GitHub CLI. No GitHub Actions required. A separate trusted Windows build service could run these same commands.
+Releases: https://github.com/taithedev/Vertex-X/releases
 
 ### Automatic updates
-When enabled, Vertex X checks the official repository's latest stable GitHub Release at startup and every four hours. For a version newer than the installed program, it downloads the named setup EXE and checksum file, validates SHA-256, and stages it in local application data. The app starts the installer only after closing normally and honoring unsaved-script warnings. Installer upgrades share the same app ID and location. User scripts in Documents and settings in LocalAppData are outside the installation payload.
+When enabled, Vertex X checks the official repository's latest **stable** release at startup and every four hours. It verifies the downloaded setup against `SHA256SUMS.txt`, then starts setup on normal exit after unsaved-script warnings. The installer waits for the exiting process before replacing files. NSIS releases use `/S /UPDATEPID=<process id>` for updates. Beta prereleases are available for manual installation and are deliberately excluded from stable update checks.
 
-**Security note:** A SHA-256 checksum distributed alongside the same release detects download corruption but is not a substitute for publisher code signing. For use outside your own machines, sign installer releases and validate updates on a Windows test machine.
+The publisher first uploads a draft with both assets and only publishes after the uploads succeed. It tags the exact committed source used for the build and refuses tracked source changes.
+
+### Validation
+Run `dotnet run --project tests/VertexX.AuthChecks` to exercise confirmation-required signup, immediate signup, empty profile responses, profile-conflict rollback, and rejected login. The native application can be cross-compiled on Linux using `-p:EnableWindowsTargeting=true -p:PublishSingleFile=false`; NSIS can package the resulting self-contained folder directly. `installer/VertexX-uninstall.nsh` is generated from the exact payload by the builder.
+
+The setup is unsigned. Native Windows install, launch, update, and uninstall testing remains necessary before calling this a stable release.
 
 ### Accounts and Roblox
 Vertex X authenticates with Supabase using an email and password, and records a profile username. Passwords go through Supabase Auth, not into `vertexx_` database tables. No secret/service-role credentials are embedded in the desktop client. Roblox profile search uses public information only; it does not prove the user owns a Roblox account or run scripts inside Roblox.
 
 ### Development limitations
-The native project and installer are source changes only until a Windows compiler and installer have successfully built them. There is no usable `.exe` attached to the repository yet. Lua execution uses an in-process interpreter; only use scripts you trust. No Roblox injection or security bypass functionality is included.
+Roblox integration provides public profile lookup, not verified ownership linking or execution inside Roblox. Accounts currently use email and password with a profile username. Lua uses an in-process interpreter: run only trusted scripts. A compiled installer and passing account regression checks do not establish that every UI feature or automatic upgrade has passed native Windows testing.
 
-For details, see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) and [v0.5 release notes](docs/RELEASE_NOTES_0.5.0.md).
+See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.5.0.md).

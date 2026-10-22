@@ -32,7 +32,7 @@
         <Border Background="#F0F0F3" Width="35" Height="35" CornerRadius="9" Margin="0,0,12,0">
           <TextBlock Text="V" FontWeight="Bold" Foreground="#08080A" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20"/>
         </Border>
-        <StackPanel><TextBlock Text="VERTEX X" FontSize="17" FontWeight="Bold" LetterSpacing="1"/><TextBlock Text="LUA DEVELOPMENT ENVIRONMENT" Foreground="#85858E" FontSize="9"/></StackPanel>
+        <StackPanel><TextBlock Text="VERTEX X" FontSize="17" FontWeight="Bold"/><TextBlock Text="LUA DEVELOPMENT ENVIRONMENT" Foreground="#85858E" FontSize="9"/></StackPanel>
         <Border BorderBrush="#3C3C45" BorderThickness="1" CornerRadius="4" Padding="7,3" Margin="15,0,0,0" VerticalAlignment="Center"><TextBlock Text="BETA 0.2" Foreground="#C2C2CD" FontSize="9"/></Border>
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

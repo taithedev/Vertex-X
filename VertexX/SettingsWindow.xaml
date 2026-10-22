@@ -4,7 +4,7 @@
 <TextBlock Text="Editor font size" Foreground="#C3C3CB" Margin="0,0,0,8"/>
 <Slider x:Name="FontSizeSlider" Minimum="10" Maximum="28" TickFrequency="1" IsSnapToTickEnabled="True" Value="15" Margin="0,0,0,18"/>
 <CheckBox x:Name="WrapCheck" Content="Wrap long lines" Margin="0,0,0,16"/>
-<CheckBox x:Name="AutoUpdateCheck" Content="Automatically download and install updates on exit" TextBlock.Foreground="#E2E2E7" Margin="0,0,0,12"/>
+<CheckBox x:Name="AutoUpdateCheck" Content="Automatically download and install updates on exit" Foreground="#E2E2E7" Margin="0,0,0,12"/>
 <TextBlock Text="Vertex X checks official GitHub Releases at startup and every 4 hours. Verified updates install after the app closes." Foreground="#9898A2" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,14"/>
 <Button Content="Apply and save" Background="#E5E5E9" Foreground="#101014" Padding="12" Click="Apply_Click"/>
 <TextBlock Text="Settings are stored locally on this Windows account." Foreground="#888892" FontSize="11" Margin="0,14,0,0"/>

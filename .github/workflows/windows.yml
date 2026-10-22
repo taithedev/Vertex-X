@@ -1,4 +1,4 @@
-name: Windows build
+name: Windows build and installer
 on:
   push:
     branches: [main]
@@ -18,9 +18,27 @@ jobs:
         run: dotnet restore VertexX/VertexX.csproj
       - name: Build
         run: dotnet build VertexX/VertexX.csproj -c Release --no-restore
-      - name: Publish Windows x64
+      - name: Publish self-contained Windows x64 app
         run: dotnet publish VertexX/VertexX.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
-      - uses: actions/upload-artifact@v4
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+      - name: Compile Vertex X setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup 6 compiler was not found" }
+          & $iscc "installer\VertexX.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload portable Windows app
+        uses: actions/upload-artifact@v4
         with:
           name: VertexX-Windows-x64
           path: publish/
+          if-no-files-found: error
+      - name: Upload Windows setup executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: VertexX-Setup-Windows-x64
+          path: installer-output/*.exe
+          if-no-files-found: error

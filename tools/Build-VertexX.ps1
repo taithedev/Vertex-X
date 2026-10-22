@@ -90,8 +90,12 @@ if ($Publish) {
   & $gh.Source auth status
   if ($LASTEXITCODE -ne 0) { throw 'Sign in with gh auth login, then run this script with -Publish.' }
   $tag = "v$Version"
-  & $gh.Source release view $tag --repo 'taithedev/Vertex-X' 2>$null
-  if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists. Use a new version." }
+  $existingJson = & $gh.Source release list --repo 'taithedev/Vertex-X' --limit 100 --json tagName
+  if ($LASTEXITCODE -ne 0) { throw 'Could not check existing GitHub Releases.' }
+  $existing = $existingJson | ConvertFrom-Json
+  if ($existing | Where-Object { $_.tagName -eq $tag }) {
+    throw "Release $tag already exists. Increment the version before publishing."
+  }
   $notes = Join-Path $root 'docs\RELEASE_NOTES_0.4.2.md'
   if ($Version -eq '0.4.2' -and (Test-Path $notes)) {
     $releaseArgs = @('release', 'create', $tag, $setup, $checksums, '--repo', 'taithedev/Vertex-X', '--target', 'main', '--title', "Vertex X $tag", '--notes-file', $notes)

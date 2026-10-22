@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
   [ValidatePattern('^\d+\.\d+\.\d+$')]
-  [string]$Version = '0.4.1',
+  [string]$Version = '0.4.2',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'
@@ -92,8 +92,8 @@ if ($Publish) {
   $tag = "v$Version"
   & $gh.Source release view $tag --repo 'taithedev/Vertex-X' 2>$null
   if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists. Use a new version." }
-  $notes = Join-Path $root 'docs\RELEASE_NOTES_0.4.1.md'
-  if ($Version -eq '0.4.1' -and (Test-Path $notes)) {
+  $notes = Join-Path $root 'docs\RELEASE_NOTES_0.4.2.md'
+  if ($Version -eq '0.4.2' -and (Test-Path $notes)) {
     $releaseArgs = @('release', 'create', $tag, $setup, $checksums, '--repo', 'taithedev/Vertex-X', '--target', 'main', '--title', "Vertex X $tag", '--notes-file', $notes)
   } else {
     $releaseArgs = @('release', 'create', $tag, $setup, $checksums, '--repo', 'taithedev/Vertex-X', '--target', 'main', '--title', "Vertex X $tag", '--generate-notes')

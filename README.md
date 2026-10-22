@@ -1,33 +1,40 @@
 # Vertex X
 
-**Vertex X** is a native C# WPF application for editing and locally running Lua scripts. This is a standalone development environment — no Electron or WebView.
+Native Windows Lua workspace in **C#, .NET 8, and WPF**. No Electron, web shell, or browser.
 
-## Features (0.2 beta)
-- Custom OLED-style dark interface, explorer pane, draggable/resizable native Windows window
-- Multiple editor tabs, unsaved-change markers, close tab shortcut
-- Open and save Lua scripts, local Scripts library in Documents/Vertex X/Scripts
-- Local MoonSharp Lua runtime with console output and error messages
-- Preferences window with adjustable font size and word wrapping
-- Keyboard shortcuts: Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+W close tab, F5 run
-- GitHub Actions Windows build and self-contained Windows x64 publish artifact
+## Features
+- Dark gray and OLED-black interface inspired by compact script editor designs
+- Multi-tab Lua editor with local file opening and saving
+- Script library in `Documents/Vertex X/Scripts`
+- Local Lua execution through MoonSharp (trusted scripts only), output console, errors
+- Preferences for editor font size and word wrapping
+- Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+W close, F5 run
 
-## Run from source
-Install the .NET 8 SDK (Windows):
+## Windows installer
+The installer is defined by `installer/VertexX.iss` and uses **Inno Setup 6.6+** with its built-in dark wizard mode, branded Vertex X wizard labels, per-user install path, Start menu entry, optional desktop shortcut, and standard uninstall entry.
+
+The GitHub Actions workflow `.github/workflows/windows.yml` builds both:
+- `VertexX-Windows-x64`: uninstalled/portable self-contained publish output
+- `VertexX-Setup-Windows-x64`: Inno Setup wizard `VertexX-Setup-0.3.0-x64.exe`
+
+To download, open **Actions** in this repository, select a successful **Windows build and installer** run, and download the appropriate artifact ZIP. Extract the ZIP before running the installer. GitHub Actions does not publish a permanent Release automatically.
+
+## Build locally
+Install the .NET 8 SDK on Windows and Inno Setup 6.6 or newer.
 
 ```powershell
 dotnet restore VertexX/VertexX.csproj
-dotnet run --project VertexX/VertexX.csproj
+dotnet build VertexX/VertexX.csproj -c Release
+dotnet publish VertexX/VertexX.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\VertexX.iss
 ```
 
-## Get executable
-Open GitHub Actions → latest successful **Windows build** → download the `VertexX-Windows-x64` artifact. Extract the ZIP and run `VertexX.exe`. Build artifacts are not signed installers; Windows SmartScreen may display a warning for unsigned programs.
+The generated setup EXE will be in `installer-output/`.
 
-## Technical notes
-- C# / WPF / .NET 8 / MoonSharp Lua, native Windows-only.
-- This release uses a built-in TextBox editor; syntax highlighting and completion are **not implemented yet**.
-- The local Lua engine is not a hardened process sandbox. Only run scripts you trust. A future version can isolate execution in a separate process.
-- Vertex X does **not** inject into Roblox or bypass anti-cheat protections.
-- No cloud accounts, auto-updater, or signed MSI are included yet.
-
-## Upcoming
-Syntax highlighting via AvalonEdit, command palette, improved script browser, unit tests, isolated runner, optional GitHub Releases updater, MSI packaging.
+## Important
+- The GitHub workflow and installer must complete a successful Windows Actions run before the setup can be considered tested.
+- Setup is **not code-signed**, so Windows may warn when executing it.
+- The installer installs locally per Windows user and **does not silently enable administrative privileges**.
+- Lua execution uses an in-process interpreter, not a hardened security sandbox; do not run untrusted scripts.
+- Vertex X does not inject into Roblox, bypass anti-cheat or execute scripts inside other applications.
+- Script syntax highlighting, autocomplete, auto-update, and a standalone custom installer engine are not implemented yet.

@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        VersionBadge.Text = "BETA " + VertexUpdateService.CurrentVersion;
+        Title = "Vertex X " + VertexUpdateService.CurrentVersion;
         Directory.CreateDirectory(_library);
         LoadPreferences();
         AddTab("Untitled.lua", "print('Welcome to Vertex X!')\n");
@@ -268,24 +270,36 @@ public partial class MainWindow : Window
         else if (e.Key == Key.O) { Open_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.S) { Save_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.F || e.Key == Key.H) { Find_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.W && ActiveTab is { } tab) {
-            if (tab.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) == true &&
-                MessageBox.Show(this, "Close tab with unsaved changes?", "Vertex X", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-            _paths.Remove(tab); EditorTabs.Items.Remove(tab);
-            if (EditorTabs.Items.Count == 0) AddTab("Untitled.lua", "");
-            e.Handled = true;
-        }
+        else if (e.Key == Key.W) { CloseTab_Click(sender, new RoutedEventArgs()); e.Handled = true; }
     }
+
+    private bool ConfirmSave(TabItem tab)
+    {
+        if (tab.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) != true) return true;
+        EditorTabs.SelectedItem = tab;
+        var answer = MessageBox.Show(this,
+            "Save changes to " + tab.Header.ToString()!.TrimEnd('*') + " before closing?",
+            "Unsaved changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return answer == MessageBoxResult.No || (answer == MessageBoxResult.Yes && SaveTab(tab));
+    }
+
+    private void CloseTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActiveTab is not { } tab || !ConfirmSave(tab)) return;
+        _paths.Remove(tab);
+        EditorTabs.Items.Remove(tab);
+        if (EditorTabs.Items.Count == 0) AddTab("Untitled.lua", "");
+    }
+
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        var dirty = EditorTabs.Items.OfType<TabItem>()
-            .Any(t => t.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) == true);
-        if (dirty && MessageBox.Show(this,
-                "You have unsaved script tabs. Exit anyway?",
-                "Vertex X", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        foreach (var tab in EditorTabs.Items.OfType<TabItem>().ToArray())
         {
-            e.Cancel = true;
-            return;
+            if (!ConfirmSave(tab))
+            {
+                e.Cancel = true;
+                return;
+            }
         }
 
         _updateTimer.Stop();

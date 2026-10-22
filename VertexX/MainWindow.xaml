@@ -50,10 +50,10 @@
   </Style>
  </Window.Resources>
  <Grid>
-  <Grid.RowDefinitions><RowDefinition Height="62"/><RowDefinition Height="*"/><RowDefinition Height="29"/></Grid.RowDefinitions>
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="29"/></Grid.RowDefinitions>
   <Border Grid.Row="0" Background="#101013" BorderBrush="#27272C" BorderThickness="0,0,0,1">
-   <Grid Margin="18,0">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid Margin="18,12">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
      <Border Background="#E6E6EA" CornerRadius="10" Width="35" Height="35" Margin="0,0,13,0">
       <TextBlock Text="V" FontSize="20" FontWeight="Bold" Foreground="#111115"
@@ -68,10 +68,10 @@
      </StackPanel>
      <Border BorderBrush="#414149" BorderThickness="1" CornerRadius="5"
       Margin="16,0,0,0" Padding="7,3" VerticalAlignment="Center">
-      <TextBlock Text="BETA 0.5" FontSize="9" Foreground="#A7A7B0"/>
+      <TextBlock x:Name="VersionBadge" Text="BETA" FontSize="9" Foreground="#A7A7B0"/>
      </Border>
     </StackPanel>
-    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+    <WrapPanel Grid.Row="1" Margin="0,12,0,0" VerticalAlignment="Center">
      <Button Content="+  New" Click="New_Click"/>
      <Button Content="Open" Click="Open_Click"/>
      <Button Content="Save" Click="Save_Click"/>
@@ -84,7 +84,7 @@
      <Button Content="Roblox" Click="Roblox_Click"/>
      <Button Content="Updates" Click="Updates_Click"/>
      <Button Content="⚙" Click="Settings_Click" Margin="0" FontSize="17" Padding="13,6"/>
-    </StackPanel>
+    </WrapPanel>
    </Grid>
   </Border>
   <Grid Grid.Row="1">
@@ -99,6 +99,7 @@
       <TextBlock Text="⌘" FontSize="21" HorizontalAlignment="Center" Foreground="White"/>
      </Border>
      <Button Content="+" Padding="0,8" FontSize="20" Margin="0,0,0,8" Click="New_Click"/>
+     <Button Content="×" ToolTip="Close current tab (Ctrl+W)" Click="CloseTab_Click" Padding="0,8" FontSize="20" Margin="0,0,0,8"/>
      <Button Content="↻" Padding="0,8" FontSize="19" Margin="0,0,0,8" Click="Refresh_Click"/>
      <Border Background="#36363C" Height="1" Margin="8,15"/>
      <Button Content="⚙" FontSize="17" Padding="0,8" Margin="0" Click="Settings_Click"/>

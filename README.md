@@ -1,40 +1,41 @@
 # Vertex X
 
-Native Windows Lua workspace in **C#, .NET 8, and WPF**. No Electron, web shell, or browser.
+Vertex X is a native Windows desktop application built in C# and WPF. No Electron.
 
 ## Features
-- Dark gray and OLED-black interface inspired by compact script editor designs
-- Multi-tab Lua editor with local file opening and saving
-- Script library in `Documents/Vertex X/Scripts`
-- Local Lua execution through MoonSharp (trusted scripts only), output console, errors
-- Preferences for editor font size and word wrapping
-- Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+W close, F5 run
+- Dark monochrome interface inspired by compact development tools
+- Multi-tab Lua script editor, file open/save, local script library, output console
+- Supabase email/password authentication with a username attached to a profile
+- Dedicated vertexx_ tables and row-level security in the existing Zuzify project
+- Roblox public profile search (not verified account linking)
+- Update checks from GitHub Releases, with optional installer download and SHA256 verification
+- Windows per-user dark installer with Start menu shortcut, optional desktop shortcut and uninstall support
 
-## Windows installer
-The installer is defined by `installer/VertexX.iss` and uses **Inno Setup 6.6+** with its built-in dark wizard mode, branded Vertex X wizard labels, per-user install path, Start menu entry, optional desktop shortcut, and standard uninstall entry.
+## Download and install
+Check https://github.com/taithedev/Vertex-X/releases for the latest Windows setup EXE. If no release appears, no downloadable installer has been published yet. GitHub Releases host finished executables; they do not compile source code.
 
-The GitHub Actions workflow `.github/workflows/windows.yml` builds both:
-- `VertexX-Windows-x64`: uninstalled/portable self-contained publish output
-- `VertexX-Setup-Windows-x64`: Inno Setup wizard `VertexX-Setup-0.3.0-x64.exe`
+## Build installer locally (no GitHub Actions)
+On a Windows x64 PC, download this repository as a ZIP, extract it, then double-click Build-VertexX.cmd. The script uses Windows Package Manager (winget) to install missing .NET 8 SDK and Inno Setup 6 prerequisites, then builds the native app.
 
-To download, open **Actions** in this repository, select a successful **Windows build and installer** run, and download the appropriate artifact ZIP. Extract the ZIP before running the installer. GitHub Actions does not publish a permanent Release automatically.
+Output: installer-output/VertexX-Setup-0.4.1-x64.exe and installer-output/SHA256SUMS.txt
 
-## Build locally
-Install the .NET 8 SDK on Windows and Inno Setup 6.6 or newer.
+To publish the EXE, authenticate GitHub CLI with gh auth login, then double-click Publish-VertexX-Release.cmd (or run tools/Build-VertexX.ps1 -Publish from PowerShell). It uploads the installer and checksums to a new v0.4.1 GitHub Release on taithedev/Vertex-X. Existing tags are not overwritten.
 
-```powershell
-dotnet restore VertexX/VertexX.csproj
-dotnet build VertexX/VertexX.csproj -c Release
-dotnet publish VertexX/VertexX.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\VertexX.iss
-```
+## In-app update behavior
+On launch or when Updates is clicked, Vertex X checks the official GitHub Releases API. A newer published release can be downloaded and SHA256-verified in the application. Opening the verified setup requires confirmation. During setup, the same installer AppId is used so newer versions upgrade existing installs.
 
-The generated setup EXE will be in `installer-output/`.
+## Run from source
+Windows + .NET 8 SDK:
 
-## Important
-- The GitHub workflow and installer must complete a successful Windows Actions run before the setup can be considered tested.
-- Setup is **not code-signed**, so Windows may warn when executing it.
-- The installer installs locally per Windows user and **does not silently enable administrative privileges**.
-- Lua execution uses an in-process interpreter, not a hardened security sandbox; do not run untrusted scripts.
-- Vertex X does not inject into Roblox, bypass anti-cheat or execute scripts inside other applications.
-- Script syntax highlighting, autocomplete, auto-update, and a standalone custom installer engine are not implemented yet.
+    dotnet restore VertexX/VertexX.csproj
+    dotnet run --project VertexX/VertexX.csproj
+
+## Known limitations
+- Installers are unsigned. Windows SmartScreen may warn about an unknown publisher.
+- GitHub Actions was removed. Build and publish using a Windows PC instead.
+- The updated installer and updater still require end-to-end Windows testing.
+- Lua runs in-process with MoonSharp's restricted preset, not a hardened sandbox. Run only scripts you trust.
+- No Roblox client injection or anti-cheat bypass.
+- Username-only login, verified Roblox OAuth linking, and unattended auto-install are not implemented.
+
+See docs/INTEGRATIONS.md for account and database information.

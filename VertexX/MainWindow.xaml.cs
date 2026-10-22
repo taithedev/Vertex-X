@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using MoonSharp.Interpreter;
 
@@ -20,6 +21,7 @@ public partial class MainWindow : Window
     private Preferences _preferences = new();
     private readonly VertexAuthService _auth = new();
     private readonly VertexUpdateService _updates = new();
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(4) };
 
     public MainWindow()
     {
@@ -29,7 +31,12 @@ public partial class MainWindow : Window
         AddTab("Untitled.lua", "print('Welcome to Vertex X!')\n");
         RefreshLibrary();
         StatusText.Text = "Ready • Scripts: " + _library;
-        Loaded += async (_, _) => await _updates.CheckAsync(this, true);
+        _updateTimer.Tick += async (_, _) => await CheckForUpdatesSilentlyAsync();
+        Loaded += async (_, _) =>
+        {
+            _updateTimer.Start();
+            await CheckForUpdatesSilentlyAsync();
+        };
     }
 
     private TextBox? ActiveEditor => (EditorTabs.SelectedItem as TabItem)?.Content as TextBox;
@@ -86,6 +93,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private async System.Threading.Tasks.Task CheckForUpdatesSilentlyAsync()
+    {
+        if (!_preferences.AutoUpdateEnabled || _updates.PendingVersion != null) return;
+        if (await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true))
+            StatusText.Text = "Vertex X " + _updates.PendingVersion + " is downloaded — install when you exit";
+    }
+
     private void Account_Click(object sender, RoutedEventArgs e)
     {
         if (_auth.AccessToken != null)
@@ -97,7 +111,11 @@ public partial class MainWindow : Window
         var dialog = new AccountWindow(_auth) { Owner = this };
         if (dialog.ShowDialog() == true) StatusText.Text = "Connected to Zuzify Supabase • " + (_auth.Username ?? "Account");
     }
-    private async void Updates_Click(object sender, RoutedEventArgs e) => await _updates.CheckAsync(this, false);
+    private async void Updates_Click(object sender, RoutedEventArgs e)
+    {
+        if (await _updates.CheckAsync(this, quietWhenCurrent: false, automatic: false))
+            StatusText.Text = "Update " + _updates.PendingVersion + " ready — close Vertex X to install";
+    }
     private void Roblox_Click(object sender, RoutedEventArgs e) => new RobloxWindow { Owner = this }.ShowDialog();
     private void New_Click(object sender, RoutedEventArgs e) => AddTab("Untitled.lua", "");
     private void Save_Click(object sender, RoutedEventArgs e) { if (ActiveTab is { } tab) SaveTab(tab); }
@@ -155,6 +173,7 @@ public partial class MainWindow : Window
             editor.TextWrapping = _preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
         }
         SavePreferences();
+        if (_preferences.AutoUpdateEnabled) _ = CheckForUpdatesSilentlyAsync();
     }
     private void LoadPreferences()
     {
@@ -188,13 +207,26 @@ public partial class MainWindow : Window
     }
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!EditorTabs.Items.OfType<TabItem>().Any(t => t.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) == true)) return;
-        if (MessageBox.Show(this, "You have unsaved tabs. Exit anyway?", "Vertex X", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        var dirty = EditorTabs.Items.OfType<TabItem>()
+            .Any(t => t.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) == true);
+        if (dirty && MessageBox.Show(this,
+                "You have unsaved script tabs. Exit anyway?",
+                "Vertex X", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
             e.Cancel = true;
+            return;
+        }
+
+        _updateTimer.Stop();
+        if (_updates.PendingVersion != null && !_updates.InstallPendingOnExit())
+            MessageBox.Show(this,
+                "The downloaded update could not be started. Your current version remains installed. Check Updates to retry.",
+                "Vertex X", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
 public sealed class Preferences
 {
     public double FontSize { get; set; } = 15;
     public bool WordWrap { get; set; }
+    public bool AutoUpdateEnabled { get; set; } = true;
 }

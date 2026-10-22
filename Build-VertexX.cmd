@@ -4,12 +4,12 @@ cd /d "%~dp0"
 echo.
 echo  VERTEX X - Native Windows Installer
 echo  -----------------------------------
-echo  Build version: 0.4.2
+echo  Build version: 0.5.0
 echo.
 if /I "%~1"=="publish" (
- powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Build-VertexX.ps1" -Version 0.4.2 -Publish
+ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Build-VertexX.ps1" -Version 0.5.0 -Publish
 ) else (
- powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Build-VertexX.ps1" -Version 0.4.2
+ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Build-VertexX.ps1" -Version 0.5.0
 )
 if errorlevel 1 (
  echo.
@@ -18,7 +18,7 @@ if errorlevel 1 (
  exit /b 1
 )
 echo.
-echo SUCCESS. See installer-output\VertexX-Setup-0.4.2-x64.exe.
+echo SUCCESS. See installer-output\VertexX-Setup-0.5.0-x64.exe.
 if /I not "%~1"=="publish" start "" "%~dp0installer-output"
 pause
 exit /b 0

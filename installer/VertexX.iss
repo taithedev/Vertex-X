@@ -1,8 +1,8 @@
-; Vertex X v0.4.2 - Native Windows setup (Inno Setup 6.7+)
+; Vertex X v0.5.0 - Native Windows setup (Inno Setup 6.6+)
 ; Compile with tools/Build-VertexX.ps1. No GitHub Actions required.
 #define MyAppName "Vertex X"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.4.2"
+  #define MyAppVersion "0.5.0"
 #endif
 #define MyAppPublisher "Vertex X"
 #define MyAppExeName "VertexX.exe"

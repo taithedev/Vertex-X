@@ -1,29 +1,33 @@
 # Vertex X
 
-Native Windows Lua workspace built with **C# and WPF**. No Electron.
+**Vertex X** is a native C# WPF application for editing and locally running Lua scripts. This is a standalone development environment — no Electron or WebView.
 
-## Initial features
-- Dark OLED-style desktop interface
-- Lua editor with open/save support
-- Local Lua execution through MoonSharp's restricted module preset
-- Output console and error reporting
+## Features (0.2 beta)
+- Custom OLED-style dark interface, explorer pane, draggable/resizable native Windows window
+- Multiple editor tabs, unsaved-change markers, close tab shortcut
+- Open and save Lua scripts, local Scripts library in Documents/Vertex X/Scripts
+- Local MoonSharp Lua runtime with console output and error messages
+- Preferences window with adjustable font size and word wrapping
+- Keyboard shortcuts: Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+W close tab, F5 run
+- GitHub Actions Windows build and self-contained Windows x64 publish artifact
 
-## Build
-Install the .NET 8 SDK on Windows, then run:
+## Run from source
+Install the .NET 8 SDK (Windows):
 
 ```powershell
 dotnet restore VertexX/VertexX.csproj
 dotnet run --project VertexX/VertexX.csproj
 ```
 
-To publish a Windows x64 executable:
+## Get executable
+Open GitHub Actions → latest successful **Windows build** → download the `VertexX-Windows-x64` artifact. Extract the ZIP and run `VertexX.exe`. Build artifacts are not signed installers; Windows SmartScreen may display a warning for unsigned programs.
 
-```powershell
-dotnet publish VertexX/VertexX.csproj -c Release -r win-x64 --self-contained true
-```
+## Technical notes
+- C# / WPF / .NET 8 / MoonSharp Lua, native Windows-only.
+- This release uses a built-in TextBox editor; syntax highlighting and completion are **not implemented yet**.
+- The local Lua engine is not a hardened process sandbox. Only run scripts you trust. A future version can isolate execution in a separate process.
+- Vertex X does **not** inject into Roblox or bypass anti-cheat protections.
+- No cloud accounts, auto-updater, or signed MSI are included yet.
 
-## Scope
-This is a standalone Lua development environment. It does not inject into games, bypass anti-cheat, or execute code inside Roblox. Lua execution is local and should not be treated as a security boundary against untrusted code.
-
-## Roadmap
-AvalonEdit syntax highlighting, tabbed workspaces, preferences, script library, signed installer, and GitHub Releases updates.
+## Upcoming
+Syntax highlighting via AvalonEdit, command palette, improved script browser, unit tests, isolated runner, optional GitHub Releases updater, MSI packaging.

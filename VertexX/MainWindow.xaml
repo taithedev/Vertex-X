@@ -1,10 +1,84 @@
-<Window x:Class="VertexX.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Vertex X" Width="1100" Height="720" MinWidth="700" MinHeight="480" Background="#0B0B0D" Foreground="#EEEEF0">
-<Window.Resources>
-<Style TargetType="Button"><Setter Property="Background" Value="#25252B"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,9"/><Setter Property="Margin" Value="0,0,8,0"/></Style>
-</Window.Resources>
-<Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="170"/></Grid.RowDefinitions>
-<StackPanel Orientation="Horizontal" Margin="0,0,0,18"><TextBlock Text="◆" FontSize="25" Margin="0,0,12,0"/><StackPanel><TextBlock Text="VERTEX X" FontSize="21" FontWeight="Bold"/><TextBlock Text="Native Lua Workspace" Foreground="#90909A" FontSize="11"/></StackPanel></StackPanel>
-<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12"><Button Content="Run Lua" Click="Run_Click"/><Button Content="Open" Click="Open_Click"/><Button Content="Save" Click="Save_Click"/><Button Content="Clear Console" Click="Clear_Click"/></StackPanel>
-<Border Grid.Row="2" Background="#151519" BorderBrush="#303037" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,14"><TextBox x:Name="Editor" Background="Transparent" Foreground="#EDEDF0" BorderThickness="0" FontFamily="Consolas" FontSize="15" AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Text="print('Hello from Vertex X!')"/></Border>
-<Border Grid.Row="3" Background="#111114" BorderBrush="#303037" BorderThickness="1" CornerRadius="10" Padding="12"><DockPanel><TextBlock DockPanel.Dock="Top" Text="OUTPUT CONSOLE" FontSize="11" Foreground="#A5A5AE" Margin="0,0,0,10"/><TextBox x:Name="ConsoleOutput" Background="Transparent" Foreground="#CFCFD6" BorderThickness="0" FontFamily="Consolas" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></DockPanel></Border>
-</Grid></Window>
+<Window x:Class="VertexX.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vertex X — Lua Workspace" Width="1280" Height="790" MinWidth="850" MinHeight="540"
+        Background="#09090B" Foreground="#EEEEF0" WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" KeyDown="Window_KeyDown" Closing="Window_Closing">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Panel" Color="#141417"/>
+    <SolidColorBrush x:Key="Stroke" Color="#33333B"/>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#25252B"/>
+      <Setter Property="Foreground" Value="#F0F0F3"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="14,9"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#404048"/></Trigger></Style.Triggers>
+    </Style>
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="#C9C9D2"/>
+      <Setter Property="Background" Value="#1B1B20"/>
+      <Setter Property="Padding" Value="18,10"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+  </Window.Resources>
+  <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="66"/><RowDefinition Height="1"/><RowDefinition Height="*"/><RowDefinition Height="30"/></Grid.RowDefinitions>
+    <Grid Grid.Row="0" Margin="20,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Border Background="#F0F0F3" Width="35" Height="35" CornerRadius="9" Margin="0,0,12,0">
+          <TextBlock Text="V" FontWeight="Bold" Foreground="#08080A" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20"/>
+        </Border>
+        <StackPanel><TextBlock Text="VERTEX X" FontSize="17" FontWeight="Bold" LetterSpacing="1"/><TextBlock Text="LUA DEVELOPMENT ENVIRONMENT" Foreground="#85858E" FontSize="9"/></StackPanel>
+        <Border BorderBrush="#3C3C45" BorderThickness="1" CornerRadius="4" Padding="7,3" Margin="15,0,0,0" VerticalAlignment="Center"><TextBlock Text="BETA 0.2" Foreground="#C2C2CD" FontSize="9"/></Border>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="+ New" Click="New_Click"/>
+        <Button Content="Open" Click="Open_Click"/>
+        <Button Content="Save" Click="Save_Click"/>
+        <Button Content="▶ Run" Click="Run_Click" Background="#E7E7EB" Foreground="#101014" FontWeight="SemiBold"/>
+        <Button Content="Settings" Click="Settings_Click" Margin="0"/>
+      </StackPanel>
+    </Grid>
+    <Border Grid.Row="1" Background="#303038"/>
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Background="#101013">
+        <DockPanel Margin="14">
+          <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="EXPLORER" FontWeight="SemiBold" Foreground="#888892" FontSize="11" Margin="4,8,0,16"/>
+            <Button Content="↻ Refresh library" Click="Refresh_Click" Margin="0,0,0,8"/>
+            <TextBlock Text="SAVED LUA FILES" FontSize="10" Foreground="#888892" Margin="4,15,0,7"/>
+          </StackPanel>
+          <ListBox x:Name="LibraryList" Background="Transparent" BorderThickness="0" Foreground="#DDDDE2" MouseDoubleClick="Library_DoubleClick" SelectionMode="Single"/>
+        </DockPanel>
+      </Border>
+      <Border Grid.Column="1" Background="#303038"/>
+      <Grid Grid.Column="2" Margin="18,16,20,16">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="6"/><RowDefinition Height="200"/></Grid.RowDefinitions>
+        <Border Grid.Row="0" BorderBrush="#303038" BorderThickness="1" Background="#141417" CornerRadius="9" Padding="1">
+          <TabControl x:Name="EditorTabs" Background="#141417" BorderThickness="0" SelectionChanged="Tabs_SelectionChanged"/>
+        </Border>
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="Transparent" ResizeDirection="Rows"/>
+        <Border Grid.Row="2" Background="#111114" BorderBrush="#303038" BorderThickness="1" CornerRadius="9" Padding="14">
+          <DockPanel>
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="OUTPUT / CONSOLE" Foreground="#AAAAAF" FontWeight="SemiBold" FontSize="11"/>
+              <Button Grid.Column="1" Content="Clear" Padding="8,3" Margin="0" Click="Clear_Click"/>
+            </Grid>
+            <TextBox x:Name="ConsoleOutput" Background="Transparent" Foreground="#CBCBD1" BorderThickness="0" FontFamily="Consolas" FontSize="12" IsReadOnly="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"/>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+    <Grid Grid.Row="3" Background="#17171B">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <TextBlock x:Name="StatusText" Text="Ready • Local execution" Foreground="#A6A6B0" FontSize="11" Margin="18,0" VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1" Text="C# • WPF • Lua • Ctrl+N / Ctrl+O / Ctrl+S / F5" Foreground="#777781" FontSize="10" Margin="0,0,18,0" VerticalAlignment="Center"/>
+    </Grid>
+  </Grid>
+</Window>

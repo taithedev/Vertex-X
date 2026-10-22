@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
   [ValidatePattern('^\d+\.\d+\.\d+$')]
-  [string]$Version = '0.4.2',
+  [string]$Version = '0.5.0',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'
@@ -96,8 +96,8 @@ if ($Publish) {
   if ($existing | Where-Object { $_.tagName -eq $tag }) {
     throw "Release $tag already exists. Increment the version before publishing."
   }
-  $notes = Join-Path $root 'docs\RELEASE_NOTES_0.4.2.md'
-  if ($Version -eq '0.4.2' -and (Test-Path $notes)) {
+  $notes = Join-Path $root 'docs\RELEASE_NOTES_0.5.0.md'
+  if ($Version -eq '0.5.0' -and (Test-Path $notes)) {
     $releaseArgs = @('release', 'create', $tag, $setup, $checksums, '--repo', 'taithedev/Vertex-X', '--target', 'main', '--title', "Vertex X $tag", '--notes-file', $notes)
   } else {
     $releaseArgs = @('release', 'create', $tag, $setup, $checksums, '--repo', 'taithedev/Vertex-X', '--target', 'main', '--title', "Vertex X $tag", '--generate-notes')

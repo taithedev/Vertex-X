@@ -117,6 +117,54 @@ public partial class MainWindow : Window
             StatusText.Text = "Update " + _updates.PendingVersion + " ready — close Vertex X to install";
     }
     private void Roblox_Click(object sender, RoutedEventArgs e) => new RobloxWindow { Owner = this }.ShowDialog();
+
+    private sealed record ScriptFileItem(string FullPath, string Name);
+
+    private void Find_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActiveEditor is { } editor)
+            new FindReplaceWindow(editor) { Owner = this }.Show();
+    }
+
+    private void Snippets_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActiveEditor == null) return;
+        var menu = new ContextMenu();
+        var snippets = new (string Title, string Text)[]
+        {
+            ("Hello world", "print('Hello from Vertex X!')"),
+            ("Function", "local function greet(name)\\n    return 'Hello, ' .. name\\nend\\n\\nprint(greet('Vertex'))"),
+            ("For loop", "for index = 1, 10 do\\n    print(index)\\nend"),
+            ("Table", "local player = { name = 'Vertex', level = 1 }\\nprint(player.name)"),
+            ("Condition", "local enabled = true\\nif enabled then\\n    print('Enabled')\\nelse\\n    print('Disabled')\\nend")
+        };
+        foreach (var snippet in snippets)
+        {
+            var entry = new MenuItem { Header = snippet.Title };
+            var value = snippet.Text.Replace("\\n", Environment.NewLine);
+            entry.Click += (_, _) =>
+            {
+                if (ActiveEditor is { } target)
+                {
+                    target.SelectedText = value;
+                    target.Focus();
+                }
+            };
+            menu.Items.Add(entry);
+        }
+        menu.IsOpen = true;
+    }
+
+    private void SaveAs_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActiveTab is { } tab) SaveTab(tab, saveAs: true);
+    }
+
+    private void LibraryFilter_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (LibraryList != null) RefreshLibrary();
+    }
+
     private void New_Click(object sender, RoutedEventArgs e) => AddTab("Untitled.lua", "");
     private void Save_Click(object sender, RoutedEventArgs e) { if (ActiveTab is { } tab) SaveTab(tab); }
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -136,12 +184,17 @@ public partial class MainWindow : Window
     private void RefreshLibrary()
     {
         Directory.CreateDirectory(_library);
-        LibraryList.ItemsSource = Directory.EnumerateFiles(_library, "*.lua").OrderBy(Path.GetFileName).ToArray();
+        var search = LibraryFilter?.Text.Trim() ?? string.Empty;
+        LibraryList.ItemsSource = Directory.EnumerateFiles(_library, "*.lua")
+            .Where(file => Path.GetFileName(file).Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
+            .Select(file => new ScriptFileItem(file, Path.GetFileName(file)))
+            .ToArray();
     }
     private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshLibrary();
     private void Library_DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (LibraryList.SelectedItem is string file) OpenFile(file);
+        if (LibraryList.SelectedItem is ScriptFileItem file) OpenFile(file.FullPath);
     }
     private void Run_Click(object sender, RoutedEventArgs e)
     {
@@ -193,10 +246,17 @@ public partial class MainWindow : Window
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.F5) { Run_Click(sender, new RoutedEventArgs()); e.Handled = true; return; }
+        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
+        {
+            SaveAs_Click(sender, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
         if (Keyboard.Modifiers != ModifierKeys.Control) return;
         if (e.Key == Key.N) { New_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.O) { Open_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.S) { Save_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.F || e.Key == Key.H) { Find_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.W && ActiveTab is { } tab) {
             if (tab.Header?.ToString()?.EndsWith("*", StringComparison.Ordinal) == true &&
                 MessageBox.Show(this, "Close tab with unsaved changes?", "Vertex X", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;

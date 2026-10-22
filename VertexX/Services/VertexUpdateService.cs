@@ -2,121 +2,207 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
 namespace VertexX;
 
+/// <summary>
+/// Downloads a newer official GitHub Release installer, validates SHA-256,
+/// and applies it only after Vertex X exits normally. No GitHub Actions required.
+/// </summary>
 public sealed class VertexUpdateService
 {
     private const string ApiUrl = "https://api.github.com/repos/taithedev/Vertex-X/releases/latest";
-    public static string CurrentVersion => typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.4.1";
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
+    private const long MaximumInstallerBytes = 300_000_000;
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(6) };
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private string? _pendingSetup;
+    private string? _pendingHash;
 
-    public async Task CheckAsync(Window owner, bool quietWhenCurrent)
+    public static string CurrentVersion =>
+        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.4.2";
+
+    public string? PendingVersion { get; private set; }
+
+    public async Task<bool> CheckAsync(Window owner, bool quietWhenCurrent, bool automatic = false)
     {
+        if (!await _gate.WaitAsync(0)) return false;
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
             request.Headers.UserAgent.Add(new ProductInfoHeaderValue("VertexX", CurrentVersion));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             using var response = await Http.SendAsync(request);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 if (!quietWhenCurrent)
-                    MessageBox.Show(owner, "No stable Vertex X release has been published yet.", "Vertex X Updates");
-                return;
+                    MessageBox.Show(owner, "Vertex X has no published stable release yet.", "Vertex X Updates");
+                return false;
             }
+
             response.EnsureSuccessStatusCode();
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var release = document.RootElement;
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var release = json.RootElement;
+            if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean()) return false;
+            if (release.TryGetProperty("prerelease", out var prerelease) && prerelease.GetBoolean()) return false;
+
             var tag = release.GetProperty("tag_name").GetString() ?? "";
             if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest) ||
                 !Version.TryParse(CurrentVersion, out var current))
             {
-                if (!quietWhenCurrent) MessageBox.Show(owner, "The release version cannot be compared.", "Vertex X Updates");
-                return;
+                if (!quietWhenCurrent) MessageBox.Show(owner, "The release version is invalid.", "Vertex X Updates");
+                return false;
             }
+
             if (latest <= current)
             {
-                if (!quietWhenCurrent) MessageBox.Show(owner, "You are using Vertex X " + CurrentVersion + ".", "Vertex X Updates");
-                return;
-            }
-            var fileName = "VertexX-Setup-" + latest.ToString(3) + "-x64.exe";
-            var assets = release.GetProperty("assets").EnumerateArray().ToArray();
-            var setup = assets.FirstOrDefault(asset =>
-                asset.GetProperty("name").GetString()?.Equals(fileName, StringComparison.OrdinalIgnoreCase) == true);
-            var sums = assets.FirstOrDefault(asset =>
-                asset.GetProperty("name").GetString() == "SHA256SUMS.txt");
-            if (setup.ValueKind != JsonValueKind.Object || sums.ValueKind != JsonValueKind.Object)
-            {
                 if (!quietWhenCurrent)
-                    MessageBox.Show(owner, "A new release exists, but its installer or SHA256 checksum is unavailable.", "Vertex X Updates");
-                return;
+                    MessageBox.Show(owner, "Vertex X " + CurrentVersion + " is up to date.", "Vertex X Updates");
+                return false;
             }
-            var setupUrl = setup.GetProperty("browser_download_url").GetString() ?? "";
-            var sumsUrl = sums.GetProperty("browser_download_url").GetString() ?? "";
-            if (!IsOfficialReleaseUrl(setupUrl) || !IsOfficialReleaseUrl(sumsUrl))
-                throw new InvalidDataException("Release assets are not hosted at the official Vertex X GitHub repository.");
-            if (MessageBox.Show(owner,
-                    "Vertex X " + latest + " is available.\n\nDownload its official installer, verify its SHA256 checksum, and open setup?\n\nThe installer is currently unsigned.",
-                    "Vertex X Update", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
-                return;
-            owner.Cursor = System.Windows.Input.Cursors.Wait;
-            try
+
+            var version = latest.ToString(3);
+            if (PendingVersion == version && File.Exists(_pendingSetup))
             {
-                var manifest = await Http.GetStringAsync(sumsUrl);
-                var matching = manifest.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(line => line.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-                    .FirstOrDefault(tokens => tokens.Length >= 2 && tokens[1] == fileName);
-                var expectedHash = matching is { Length: >= 2 } ? matching[0].Trim() : "";
-                if (expectedHash.Length != 64 || !expectedHash.All(Uri.IsHexDigit))
-                    throw new InvalidDataException("Installer checksum is missing or invalid.");
-                var directory = Path.Combine(Path.GetTempPath(), "VertexXUpdates", latest.ToString(3));
-                Directory.CreateDirectory(directory);
-                var target = Path.Combine(directory, fileName);
-                using (var download = await Http.GetAsync(setupUrl, HttpCompletionOption.ResponseHeadersRead))
+                if (!automatic && !quietWhenCurrent)
+                    MessageBox.Show(owner, "Vertex X " + version + " is ready. Close Vertex X to install it.", "Vertex X Updates");
+                return true;
+            }
+
+            var fileName = "VertexX-Setup-" + version + "-x64.exe";
+            var assets = release.GetProperty("assets").EnumerateArray().ToArray();
+            var setupAsset = assets.FirstOrDefault(a =>
+                a.GetProperty("name").GetString()?.Equals(fileName, StringComparison.OrdinalIgnoreCase) == true);
+            var sumsAsset = assets.FirstOrDefault(a =>
+                a.GetProperty("name").GetString()?.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase) == true);
+
+            if (setupAsset.ValueKind != JsonValueKind.Object || sumsAsset.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("Release is missing its setup EXE or SHA256SUMS.txt.");
+
+            var setupUrl = setupAsset.GetProperty("browser_download_url").GetString() ?? "";
+            var sumsUrl = sumsAsset.GetProperty("browser_download_url").GetString() ?? "";
+            if (!IsReleaseDownload(setupUrl) || !IsReleaseDownload(sumsUrl))
+                throw new InvalidDataException("Unexpected release download URL.");
+
+            if (!automatic && MessageBox.Show(owner,
+                    "Vertex X " + version + " is available.\n\nDownload the installer and install it the next time Vertex X closes?",
+                    "Vertex X Updates", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return false;
+
+            var manifest = await Http.GetStringAsync(sumsUrl);
+            var tokens = manifest.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                .FirstOrDefault(parts => parts.Length >= 2 && parts[1].TrimStart('*') == fileName);
+            var expectedHash = tokens is { Length: >= 2 } ? tokens[0] : "";
+            if (expectedHash.Length != 64 || !expectedHash.All(Uri.IsHexDigit))
+                throw new InvalidDataException("Installer SHA-256 checksum is missing or invalid.");
+
+            var cache = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "VertexX", "Updates", version);
+            Directory.CreateDirectory(cache);
+            var destination = Path.Combine(cache, fileName);
+            if (!await MatchesSha256Async(destination, expectedHash))
+            {
+                var temporary = destination + ".part";
+                try
                 {
+                    using var download = await Http.GetAsync(setupUrl, HttpCompletionOption.ResponseHeadersRead);
                     download.EnsureSuccessStatusCode();
-                    if (download.Content.Headers.ContentLength > 300_000_000)
-                        throw new InvalidDataException("Installer exceeds the allowed download size.");
-                    await using var source = await download.Content.ReadAsStreamAsync();
-                    await using var destination = File.Create(target);
-                    await source.CopyToAsync(destination);
-                }
-                await using (var stream = File.OpenRead(target))
-                {
-                    var digest = Convert.ToHexString(await SHA256.HashDataAsync(stream));
-                    if (!digest.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+                    if (download.Content.Headers.ContentLength is long size && size > MaximumInstallerBytes)
+                        throw new InvalidDataException("Installer exceeds the allowed file size.");
+
+                    await using var input = await download.Content.ReadAsStreamAsync();
+                    await using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        File.Delete(target);
-                        throw new InvalidDataException("Installer checksum mismatch. The file was rejected.");
+                        var buffer = new byte[64 * 1024];
+                        long total = 0;
+                        int read;
+                        while ((read = await input.ReadAsync(buffer.AsMemory())) > 0)
+                        {
+                            total += read;
+                            if (total > MaximumInstallerBytes)
+                                throw new InvalidDataException("Installer exceeds the allowed file size.");
+                            await output.WriteAsync(buffer.AsMemory(0, read));
+                        }
                     }
+
+                    if (!await MatchesSha256Async(temporary, expectedHash))
+                        throw new InvalidDataException("Installer checksum does not match. Update rejected.");
+                    File.Move(temporary, destination, overwrite: true);
                 }
-                if (MessageBox.Show(owner,
-                        "Vertex X setup downloaded and SHA256 verified.\n\nSave your open scripts, then select Yes to start the installer. The installer may need to close Vertex X.",
-                        "Start Verified Setup?", MessageBoxButton.YesNo, MessageBoxImage.Question) ==
-                    MessageBoxResult.Yes)
+                finally
                 {
-                    Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                    if (File.Exists(temporary)) File.Delete(temporary);
                 }
             }
-            finally { owner.Cursor = null; }
+
+            _pendingSetup = destination;
+            _pendingHash = expectedHash;
+            PendingVersion = version;
+
+            if (!automatic)
+                MessageBox.Show(owner,
+                    "Vertex X " + version + " has been downloaded and verified.\n\nClose Vertex X normally to apply the update. Your saved Lua files and account settings will remain in your profile.",
+                    "Update Ready", MessageBoxButton.OK, MessageBoxImage.Information);
+            return true;
         }
         catch (Exception ex)
         {
             if (!quietWhenCurrent)
-                MessageBox.Show(owner, "Update check or download failed: " + ex.Message, "Vertex X Updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(owner, "Vertex X could not check or prepare the update:\n" + ex.Message,
+                    "Vertex X Updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
         }
+        finally { _gate.Release(); }
     }
 
-    private static bool IsOfficialReleaseUrl(string url)
+    public bool InstallPendingOnExit()
     {
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        var setup = _pendingSetup;
+        var hash = _pendingHash;
+        if (setup == null || hash == null || !File.Exists(setup)) return false;
+        try
+        {
+            using var stream = File.OpenRead(setup);
+            var actual = Convert.ToHexString(SHA256.HashData(stream));
+            if (!actual.Equals(hash, StringComparison.OrdinalIgnoreCase)) return false;
+
+            // Installer uses the same AppId and per-user directory as the original install.
+            // Inno Setup waits for the exiting application's files to become available.
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = setup,
+                Arguments = "/SILENT /NORESTART /NORESTARTAPPLICATIONS /CLOSEAPPLICATIONS /SP-",
+                UseShellExecute = true
+            });
+            _pendingSetup = null;
+            _pendingHash = null;
+            PendingVersion = null;
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static async Task<bool> MatchesSha256Async(string file, string expectedHash)
+    {
+        if (!File.Exists(file)) return false;
+        await using var stream = File.OpenRead(file);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream))
+            .Equals(expectedHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsReleaseDownload(string text)
+    {
+        return Uri.TryCreate(text, UriKind.Absolute, out var uri)
             && uri.Scheme == Uri.UriSchemeHttps
             && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
             && uri.AbsolutePath.StartsWith("/taithedev/Vertex-X/releases/download/", StringComparison.Ordinal);

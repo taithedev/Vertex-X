@@ -11,7 +11,7 @@ Native C# / WPF desktop release, with the same install-and-update distribution p
 - Downloadable standalone Windows x64 setup EXE; no GitHub Actions dependency
 
 ## Release assets
-The Windows builder attaches \`VertexX-Setup-0.4.2-x64.exe\` and \`SHA256SUMS.txt\`.
+The Windows builder attaches `VertexX-Setup-0.4.2-x64.exe` and `SHA256SUMS.txt`.
 
 ## Notes
 Release downloads require an installer to have been successfully compiled on Windows and published by a maintainer. This release does not provide Roblox client script execution or verified Roblox OAuth linking. Installer is currently unsigned.

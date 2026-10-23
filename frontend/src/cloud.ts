@@ -61,8 +61,8 @@ export function useCloud(account: Account) {
     socket.onmessage=event=>{
      if(!alive)return;
      try{const msg=JSON.parse(event.data);
-      if(msg.event==='phx_reply'){lastHeartbeat=Date.now();if(msg.topic===topic){if(msg.payload?.status==='ok'){attempt=0;setStatus('Live');void refresh();}else socket?.close();}}
-      if(msg.event==='system'&&msg.payload?.status==='error')socket?.close();
+      if(msg.event==='phx_reply'){lastHeartbeat=Date.now();if(msg.topic===topic){if(msg.payload?.status==='ok'){setStatus('Subscribing…');void refresh();}else socket?.close();}}
+      if(msg.event==='system'){if(msg.payload?.status==='ok'){attempt=0;setStatus('Live');void refresh();}else if(msg.payload?.status==='error')socket?.close();}
       if(msg.event==='postgres_changes'){clearTimeout(debounce);debounce=window.setTimeout(()=>void refresh(),250);}
      }catch{/* Ignore malformed protocol messages. */}
     };
@@ -72,8 +72,8 @@ export function useCloud(account: Account) {
   }
   void connect();
   refreshTimer=window.setInterval(async()=>{
-   void refresh();
    if(!alive||!realtimeEnabled||!session)return;
+   void refresh();
    try{const next=await native<Session>('cloud.session');if(!alive)return;if(next.accessToken!==session.accessToken){session=next;send('realtime:vertexx:'+next.userId,'access_token',{access_token:next.accessToken},'1');}}
    catch{setStatus('Session needs sign-in');socket?.close();}
   },30000);

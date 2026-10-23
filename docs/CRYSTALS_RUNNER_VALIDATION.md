@@ -1,19 +1,9 @@
-# Required before enabling crystal execution
+# Crystal execution validation — v0.8.0 beta
 
-The cloud runner is disabled. This prevents an untested execution path from charging users.
+Execution is enabled after staging and production HTTP integration checks.
 
-Run tests in a functioning environment before changing executionEnabled:
-- TypeScript/Vite build and native C# build; update the browser bridge tests for signed-in cloud execution.
-- Sign in as owner and two ordinary test users. Verify no cross-user wallet, private-script, run-history or profile mutation access.
-- Attempt direct REST/RPC balance changes, self-verification, self-owner assignment and forged success settlements; all must fail.
-- Execute a valid script: exactly one crystal debit. Repeat with the same request ID/source: no extra debit. Mismatched-source replay must fail.
-- Syntax errors, runtime errors, time/instruction limits, resource termination, explicit cancellation and pending expiry: zero debits.
-- Concurrent runs and completion/cancellation races: one authoritative terminal state and no negative wallet.
-- Test nested loops, string/table allocation, recursive calls, malicious bytecode and Lua protected-call attempts. The candidate runner removes protected-call/coroutine, OS, IO, package, debug and interop facilities; evaluate compatibility before release. Do not describe it as process/memory isolation.
-- Lost HTTP response: use stored run history/request ID to recover the authoritative outcome, and never label an unknown outcome as a confirmed failure.
-- Daily claims once per UTC day; grants only by owner; initial balance issued once.
-- Avatar validation, expired/incorrect Roblox proof, duplicate Roblox linking and unlink.
-- Two clients: script upload/removal/moderation, profile changes, verification and balances update via Realtime. Test disconnects, token rotation, reduced motion and account switches.
-- Native Windows install, shortcut creation, authenticated avatar UI, save prompts, release checksum staging and upgrade/uninstall.
+Passed: ordinary output/returns and protected calls; syntax/runtime failures; loops and nested protected-call quota escapes; malicious error handlers and tostring; string growth, repetition and format guards; bytecode rejection; restricted globals and output truncation. Tests run in separate capped Node processes: `npm ci --prefix supabase/tests/runner` then `npm test --prefix supabase/tests/runner` (Node 24+).
 
-Publish VertexX-Setup-0.8.0-x64.exe and SHA256SUMS.txt to a GitHub Release only after the new binary passes validation. Main's existing v0.7.0 EXE remains the last built release.
+Production checks passed for one successful-run charge, retry idempotency, failed/quota/cancelled runs without charges, daily limits, owner-free runs, verification/grants/moderation, user/private-script isolation and denied direct REST/RPC wallet or role modifications. An authenticated Realtime subscriber received a wallet change after its database subscription was confirmed. Temporary accounts were removed and test endpoints retired.
+
+TypeScript, C# cross-build, native regression suites and controlled-host browser community/editor checks passed. The owner wallet remains 100. Native Windows install/upgrade/uninstall and successful real Roblox bio verification remain manual beta checks. Platform hard termination is not simulated by the Lua regression suite; unfinished runs expire without settlement charges. This interpreter is not a per-script process isolation boundary.

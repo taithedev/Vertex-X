@@ -43,7 +43,7 @@ create index vertexx_scripts_author on public.vertexx_scripts(author_id);
 create index vertexx_scripts_newest on public.vertexx_scripts(updated_at desc);
 create table public.vertexx_script_moderation (
  script_id uuid primary key references public.vertexx_scripts(id) on delete cascade,
- hidden boolean not null default false, updated_by uuid not null references public.vertexx_members(user_id),
+ hidden boolean not null default false, updated_by uuid references public.vertexx_members(user_id) on delete set null,
  updated_at timestamptz not null default now()
 );
 create table public.vertexx_cloud_preferences (
@@ -190,3 +190,5 @@ begin
 end $$;
 revoke all on function public.vertexx_script_guard() from public,anon,authenticated;
 create trigger vertexx_script_write_guard before insert or update on public.vertexx_scripts for each row execute function public.vertexx_script_guard();
+
+create index vertexx_moderation_actor on public.vertexx_script_moderation(updated_by);

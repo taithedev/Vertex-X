@@ -29,7 +29,6 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _fileGate = new(1, 1);
     private Dictionary<string, string> _paths = new();
     private Preferences _preferences = new();
-    private CancellationTokenSource? _execution;
     private string? _cloudRunId;
     private bool _allowClose;
     private bool _ready;
@@ -304,7 +303,6 @@ public partial class MainWindow : Window
             if (!_closeRequested) { _closeRequested = true; Send(new { type = "request-close" }); }
             return;
         }
-        _execution?.Cancel();
         _timer.Stop();
         if (_updates.PendingVersion != null && !_updates.InstallPendingOnExit())
             MessageBox.Show(this, "The update could not start. Your current version remains installed. Use Updates to retry.", "Vertex X Updates");

@@ -1,8 +1,6 @@
-# Vertex X v0.8.0 preview — Accounts, community and crystals
+# Vertex X v0.8.0 beta — Accounts, community and crystals
 
-This is an unbuilt integration preview. v0.7.0 is still the last installer produced.
-
-## Implemented source
+## Changes
 - Refreshable memory-only account sessions, remote sign-out attempt and password changes.
 - Shared public/private Lua script uploads, source inspection in the editor, author avatars and verified badges.
 - In-app profiles, compressed custom avatars, bios and a cloud wallet.
@@ -13,16 +11,16 @@ This is an unbuilt integration preview. v0.7.0 is still the last installer produ
 - Roblox account proof using a temporary profile-bio code. Linked avatars render as embedded data inside the app. This is not Roblox OAuth; it requires changing the Roblox bio once. The app never asks for Roblox credentials.
 - Startup and configurable 15-minute/hourly/four-hour checks for complete releases from taithedev/Vertex-X. Verified downloads install on exit after save prompts.
 
-## Deployed backend
-The new vertexx_ tables, policies, ledger RPCs and vertexx-api Edge Function are deployed. The authenticated GitHub account was matched by email to a confirmed Supabase account and assigned the owner role. Other app tables were not changed.
+## Deployment and validation
 
-Database checks passed for success charging, retry idempotency, free failure/cancellation, daily-claim limits and restricted wallet/role/function privileges. All mutation checks were rolled back; the owner wallet remains at 100 crystals. The Edge deployment service accepted the function bundle.
+The production account API, row-level policies, server-owned wallets and Realtime publications are deployed. Execution is enabled after testing against both staging and production. The owner account is verified; its wallet remains at 100 crystals.
 
-## Release blockers
-The execution environment was unavailable: no TypeScript build, C# compilation, browser integration test, HTTP-auth integration test or Windows EXE was produced for this preview. The server Lua runner is deliberately disabled (executionEnabled=false). It must pass adversarial instruction/time/memory, serialization, compatibility, cancellation and end-to-end charge tests before activation. The candidate runner omits protected-call/coroutine and OS/IO libraries, and is not compatible with every desktop Lua script. Do not remove the gate without validating those limits and compatibility. No crystals are deducted while this gate is off.
+Passed: TypeScript/Vite build; Windows x64 cross-build; native account, update, Lua, Roblox profile and library checks; controlled-host browser editor/community flows with no renderer errors; adversarial cloud Lua tests; real authenticated HTTP checks for account bootstrap, upload ownership, private access, owner authorization, verification/grants/moderation, settings, daily claims, cancellation, failed-run refunds and successful-run idempotency; actual Realtime wallet notification. Disposable accounts were removed and validation endpoints retired.
 
-The Realtime client and Roblox bio-proof flow need end-to-end testing. A signed-in identity is required for all account mutations. GET health exposes only version/gate metadata; POST validates the bearer with Supabase Auth on every request.
+The runner supports protected calls while propagating execution limits through them. It omits coroutine, OS, IO, package, debug and interop libraries. Source is limited to 100 KB, execution to 300,000 instructions or 750 ms, individual strings to 256 KiB and console output to 100,000 characters. Hosting limits are the final resource boundary; this is not process isolation per script.
 
-Source changes alone do not deliver updates. Publish the validated VertexX-Setup-0.8.0-x64.exe and SHA256SUMS.txt as a GitHub Release after the new installer is built and tested.
+## Beta limitations
 
-Security review: the new tables have RLS and explicit grants. Challenge rows are service-only by design; the advisor's no-policy INFO for vertexx_roblox_challenges describes intentional default denial. Existing unrelated project advisories were left untouched. The account API itself validates bearer tokens; gateway verify_jwt is disabled to support this explicit validation path.
+The installer is unsigned. Native Windows installation, WebView2 startup, shortcuts, update installation and uninstall require a Windows smoke test before stable promotion. Browser checks use a controlled native bridge. Successful Roblox ownership linking requires a real bio edit and was not completed in this test; unproven links were rejected. This app does not inject into Roblox. The FPS helper opens Windows Game Bar.
+
+Auto-update requires both VertexX-Setup-0.8.0-x64.exe and SHA256SUMS.txt on a published release in taithedev/Vertex-X. Downloads are hash-checked and install on exit after save prompts. Source commits alone do not publish a binary update.

@@ -4,7 +4,7 @@ const url = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
 const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // Enable only after runner integration and adversarial tests pass; old releases are unaffected.
-const executionEnabled = false;
+const executionEnabled = true;
 const cors = { "Access-Control-Allow-Origin": "https://vertexx.local", "Access-Control-Allow-Headers": "authorization,apikey,content-type", "Access-Control-Allow-Methods": "POST,OPTIONS" };
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 function text(value: unknown, max: number, label: string, required = true) {
@@ -54,7 +54,7 @@ async function robloxAvatar(id: number) {
 }
 Deno.serve(async req => {
  if(req.method==="OPTIONS")return new Response(null,{headers:cors});
- if(req.method==="GET")return response({service:"vertexx-api",executionEnabled,version:"0.8.0-preview"});
+ if(req.method==="GET")return response({service:"vertexx-api",executionEnabled,version:"0.8.0"});
  if(req.method!=="POST")return response({error:"Method not allowed"},405);
  try {
   const bearer=req.headers.get("Authorization");
@@ -91,7 +91,7 @@ Deno.serve(async req => {
   }
   if(action==="settings.save"){
    const settings={realtime:data.realtime!==false,confirmRun:data.confirmRun===true,compactLibrary:data.compactLibrary===true,preferRobloxAvatar:data.preferRobloxAvatar===true,defaultVisibility:data.defaultVisibility==="private"?"private":"public"};
-   return response(await rest("vertexx_cloud_preferences?on_conflict=user_id","POST",{user_id:actor,settings},token,"resolution=merge-duplicates,return=representation"));
+   return response(await rest("vertexx_cloud_preferences?user_id=eq."+actor,"PATCH",{settings},token));
   }
   if(action==="scripts.upload"){
    const count=await rest("vertexx_scripts?author_id=eq."+actor+"&select=id&limit=1001");

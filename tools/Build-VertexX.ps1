@@ -1,7 +1,7 @@
 # Build and optionally publish Vertex X using .NET 8 and NSIS. No Actions required.
 [CmdletBinding()]
 param(
-  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.6.0',
+  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.6.1',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'
@@ -51,6 +51,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Account regression checks failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Update regression checks failed.' }
 & dotnet run --project (Join-Path $root 'tests\VertexX.RuntimeChecks') -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'Lua runtime checks failed.' }
+& dotnet run --project (Join-Path $root 'tests\VertexX.RobloxChecks') -p:NuGetAudit=false
+if ($LASTEXITCODE -ne 0) { throw 'Roblox profile checks failed.' }
 & dotnet publish $project -c Release -r win-x64 --self-contained true "-p:Version=$Version" '-p:PublishSingleFile=false' -o $publishDir
 if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
 if (!(Test-Path (Join-Path $publishDir 'VertexX.exe'))) { throw 'Application EXE is missing.' }

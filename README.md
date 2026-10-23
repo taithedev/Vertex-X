@@ -1,6 +1,12 @@
 # Vertex X
 
-A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.0 beta**.
+A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.1 beta**.
+
+## New in 0.6.1
+
+Public Roblox avatars, bios, join dates and verified badges now appear in profile lookup. The editor adds Ctrl+Space suggestions, Tab/Enter acceptance, four-space indentation, paired brackets and snippets with Tab stops.
+
+For FPS without Studio, open **Roblox profiles & FPS**. While playing Roblox, press **Win + G**, open **Performance**, select **FPS**, and pin the widget. Vertex X includes Game Bar and settings shortcuts. Windows measures the FPS; Vertex X does not attach its Lua runner to Roblox. Game Bar must be installed and enabled, and Windows may request access or a restart.
 
 ## Workspace
 
@@ -17,7 +23,7 @@ A Windows Lua workspace with a React interface and a native C# / WPF host. Curre
 
 Run `Build-VertexX.cmd` on Windows. The builder installs missing .NET 8 SDK, Node.js LTS and NSIS prerequisites through winget, installs locked npm dependencies, builds React, runs the account/update/runtime checks, publishes the self-contained Windows application, and packages it with NSIS.
 
-Output: `installer-output/VertexX-Setup-0.6.0-x64.exe` and `SHA256SUMS.txt`.
+Output: `installer-output/VertexX-Setup-0.6.1-x64.exe` and `SHA256SUMS.txt`.
 
 The app uses Microsoft WebView2 to render bundled React assets. Setup detects the runtime and installs Microsoft's signed Evergreen bootstrapper when needed. This prerequisite needs internet if WebView2 is not installed. The Windows builder verifies the bootstrapper's Microsoft Authenticode signature. No separate .NET runtime installation is required.
 
@@ -41,10 +47,11 @@ Run the platform-independent native checks:
 dotnet run --project tests/VertexX.AuthChecks
 dotnet run --project tests/VertexX.UpdateChecks
 dotnet run --project tests/VertexX.RuntimeChecks
+dotnet run --project tests/VertexX.RobloxChecks
 ```
 
 The WPF application can be cross-compiled on Linux with `-p:EnableWindowsTargeting=true -p:PublishSingleFile=false` after building React. Windows install, WebView2 initialization, dialogs, real account login, update installation and uninstall still require native Windows testing. A passing cross-build or a browser test with a controlled host does not replace those checks. The installer is unsigned.
 
 Run only trusted Lua. The in-process interpreter is not a secure memory/process isolation boundary, even with cooperative execution limits.
 
-See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.6.0.md).
+See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.6.1.md).

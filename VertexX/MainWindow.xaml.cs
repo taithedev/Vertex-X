@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -19,10 +18,10 @@ public partial class MainWindow : Window
 {
     private const string Origin = "https://vertexx.local";
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly string _data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VertexX");
     private readonly string _library = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Vertex X", "Scripts");
     private readonly VertexAuthService _auth = new();
+    private readonly RobloxProfileService _roblox = new();
     private readonly VertexUpdateService _updates = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromHours(4) };
     private readonly SemaphoreSlim _accountGate = new(1, 1);
@@ -231,19 +230,12 @@ public partial class MainWindow : Window
                 await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true);
                 return UpdateState();
             case "updates.page": Process.Start(new ProcessStartInfo("https://github.com/taithedev/Vertex-X/releases") { UseShellExecute = true }); return null;
+            case "performance.gamebar":
+                Process.Start(new ProcessStartInfo("ms-gamebar:") { UseShellExecute = true }); return null;
+            case "performance.settings":
+                Process.Start(new ProcessStartInfo("ms-settings:gaming-gamebar") { UseShellExecute = true }); return null;
             case "roblox.lookup":
-            {
-                var username = Text(p, "username", 20).Trim();
-                if (username.Length < 3) throw new ArgumentException("Enter a Roblox username.");
-                using var body = new StringContent(JsonSerializer.Serialize(new { usernames = new[] { username }, excludeBannedUsers = true }), Encoding.UTF8, "application/json");
-                using var response = await Http.PostAsync("https://users.roblox.com/v1/usernames/users", body);
-                response.EnsureSuccessStatusCode();
-                using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-                var users = doc.RootElement.GetProperty("data");
-                if (users.GetArrayLength() == 0) throw new InvalidOperationException("No matching public profile found.");
-                var user = users[0];
-                return new { id = user.GetProperty("id").GetInt64(), name = user.GetProperty("name").GetString(), displayName = user.GetProperty("displayName").GetString() };
-            }
+                return await _roblox.LookupAsync(Text(p, "username", 20));
             case "roblox.open":
                 var userId = p.GetProperty("id").GetInt64();
                 if (userId <= 0) throw new ArgumentException("Invalid profile ID.");

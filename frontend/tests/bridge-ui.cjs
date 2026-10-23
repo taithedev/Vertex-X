@@ -31,7 +31,7 @@ const server = http.createServer((req, res) => {
     const prefs = { fontSize: 14, wordWrap: false, autoUpdateEnabled: true, accent: 'violet' };
     const file = { id: '99999999-9999-4999-8999-999999999999', name: 'native.lua', content: "print('native-file')", baseline: "print('native-file')" };
     switch (message.method) {
-     case 'app.ready': return reply({ version: '0.6.0', preferences: prefs, account: { signedIn: false }, library: [{ name: 'native.lua', size: 20 }] });
+     case 'app.ready': return reply({ version: '0.6.1', preferences: prefs, account: { signedIn: false }, library: [{ name: 'native.lua', size: 20 }] });
      case 'files.list': return reply([{ name: 'native.lua', size: 20 }]);
      case 'files.open': return reply([file]);
      case 'files.library': return reply(file);
@@ -41,8 +41,10 @@ const server = http.createServer((req, res) => {
      case 'settings.save': return reply(message.payload);
      case 'auth.login': return reply({ message: 'Signed in as tester', account: { signedIn: true, username: 'tester' } });
      case 'auth.logout': return reply({ account: { signedIn: false } });
-     case 'roblox.lookup': return reply({ id: 1, name: 'Roblox', displayName: 'Roblox' });
-     case 'updates.check': return reply({ version: '0.6.0', message: 'No complete published release is available yet.' });
+     case 'performance.gamebar':
+     case 'performance.settings': return reply(null);
+     case 'roblox.lookup': return reply({ id: 1, name: 'Roblox', displayName: 'Roblox', description: 'Public test biography', created: '2006-02-27T21:06:40Z', hasVerifiedBadge: true, avatarState: 'Completed', avatarDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=' });
+     case 'updates.check': return reply({ version: '0.6.1', message: 'No complete published release is available yet.' });
      default: return reply(null);
     }
    } } };
@@ -52,7 +54,7 @@ const server = http.createServer((req, res) => {
   await page.getByRole('heading', { name: 'Code. Run. Create.' }).waitFor();
   console.log('UI loaded');
   assert.equal(await page.locator('.preview-banner').count(), 0);
-  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  await page.keyboard.press('Control+n');
   await page.getByRole('textbox', { name: 'Lua script editor' }).fill('print("bridge check")');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByText('Script saved to disk.').waitFor();
@@ -99,6 +101,42 @@ const server = http.createServer((req, res) => {
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   console.log('Account bridge passed');
+  await page.getByRole('button', { name: 'Roblox profiles', exact: false }).click();
+  await page.getByLabel('Roblox username').fill('Roblox');
+  await page.getByRole('button', { name: 'Find public profile', exact: true }).click();
+  await page.getByRole('img', { name: 'Roblox Roblox avatar' }).waitFor();
+  await page.getByText('Public test biography', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Open Game Bar', exact: true }).click();
+  await page.getByRole('button', { name: 'Game Bar settings', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.__host.calls.filter(x => x.method === 'performance.gamebar').length), 1);
+  assert.equal(await page.evaluate(() => window.__host.calls.filter(x => x.method === 'performance.settings').length), 1);
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+
+  await page.keyboard.press('Control+n');
+  const editor = page.getByRole('textbox', { name: 'Lua script editor' });
+  await editor.fill('pri');
+  await page.keyboard.press('Control+Space');
+  await page.locator('.cm-tooltip-autocomplete').waitFor();
+  await page.keyboard.press('Tab');
+  assert.equal(await editor.textContent(), 'print');
+  await page.keyboard.type('(');
+  assert.equal(await editor.textContent(), 'print()');
+  await page.keyboard.press('Escape');
+  await editor.fill('if true then');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Enter');
+  assert.equal((await editor.locator('.cm-line').allTextContents()).join('\n'), 'if true then\n    ');
+  await editor.fill('game:GetService("Players")');
+  const previousRuns = await page.evaluate(() => window.__host.calls.filter(x => x.method === 'lua.run').length);
+  await page.getByRole('button', { name: 'Run script', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Roblox profiles & FPS' }).waitFor();
+  assert.equal(await page.evaluate(() => window.__host.calls.filter(x => x.method === 'lua.run').length), previousRuns);
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await page.keyboard.press('Control+w');
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  console.log('Roblox profile, Windows FPS launch commands, completion Tab, bracket pairs and Enter indentation checked');
+
   await page.getByRole('button', { name: 'Updates', exact: true }).click();
   await page.getByRole('button', { name: 'Check for updates' }).click();
   await page.getByText('No complete published release is available yet.').waitFor();

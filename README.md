@@ -2,7 +2,7 @@
 
 A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.7.0 beta**.
 
-## Interface Preview
+## Tuff UI
 
 ![Vertex X — dark UI showcase](docs/images/wide_high_detail_render_of_a_futuristic_dark_them.png)
 

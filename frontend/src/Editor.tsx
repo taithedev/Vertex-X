@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, rectangularSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting, HighlightStyle, StreamLanguage } from '@codemirror/language';
+import { indentUnit, bracketMatching, foldGutter, indentOnInput, syntaxHighlighting, HighlightStyle, StreamLanguage } from '@codemirror/language';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lua } from '@codemirror/legacy-modes/mode/lua';
 import { tags } from '@lezer/highlight';
+import { autocompletion, completionKeymap, acceptCompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { luaCompletions } from './completions';
 
 const colors = HighlightStyle.define([
  { tag: tags.keyword, color: '#bf9cff' }, { tag: [tags.string, tags.special(tags.string)], color: '#a7d9b0' },
@@ -21,7 +23,8 @@ export function Editor({ content, wrap, fontSize, onChange, onCursor }: { conten
  useEffect(() => {
    const editor = new EditorView({ parent: container.current!, state: EditorState.create({ doc: content, extensions: [
     lineNumbers(), foldGutter(), highlightActiveLine(), highlightActiveLineGutter(), history(), drawSelection(), rectangularSelection(),
-    indentOnInput(), bracketMatching(), search({ top: true }), highlightSelectionMatches(), StreamLanguage.define(lua), syntaxHighlighting(colors),
+    indentOnInput(), indentUnit.of('    '), bracketMatching(), closeBrackets(), autocompletion({ override: [luaCompletions], activateOnTyping: true }), search({ top: true }), highlightSelectionMatches(), StreamLanguage.define(lua), syntaxHighlighting(colors),
+    Prec.high(keymap.of([{ key: 'Tab', run: acceptCompletion }, ...completionKeymap, ...closeBracketsKeymap])),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]), EditorState.tabSize.of(4),
     wrapping.current.of(wrap ? EditorView.lineWrapping : []),
     EditorView.theme({ '&': { height: '100%', background: 'transparent', color: '#dbdce7' }, '.cm-content': { fontFamily: 'Consolas, "Cascadia Code", monospace', padding: '20px 0', caretColor: '#c1a7ff' }, '.cm-line': { padding: '0 22px 0 12px' }, '.cm-gutters': { background: 'transparent', color: '#4f5261', border: 'none', padding: '0 8px 0 12px' }, '.cm-activeLine': { background: '#ffffff03' }, '.cm-activeLineGutter': { background: 'transparent', color: '#a6a3b5' }, '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { background: '#a581ef30' }, '.cm-cursor': { borderLeftColor: '#c5b1f7' }, '.cm-scroller': { overflow: 'auto', lineHeight: '1.85' }, '.cm-searchMatch': { backgroundColor: '#8b6bba44', outline: '1px solid #9e83bc' }, '.cm-panels': { background: '#1b1b23', color: '#d8d4e6', borderColor: '#33333f' } }, { dark: true }),

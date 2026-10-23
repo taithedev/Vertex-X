@@ -2,6 +2,12 @@
 
 A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.0 beta**.
 
+## Unreleased source update
+
+The draft Roblox tools update adds an in-game FPS starter LocalScript, Roblox avatars/profile details, and CodeMirror Tab/Enter completions, paired brackets and snippets. The current downloadable installer is still v0.6.0; these source changes have **not** been compiled, browser-tested or tested in Roblox Studio because the execution environment is unavailable.
+
+For an FPS counter in a game you own, use [the Studio LocalScript and setup guide](roblox/README.md). In Vertex X, open **Roblox profiles & Studio tools**, choose **Open FPS overlay**, then copy it into a LocalScript under StarterPlayer → StarterPlayerScripts in Roblox Studio. Roblox APIs must be tested using Studio Play; the desktop Lua runner does not attach to Roblox.
+
 ## Workspace
 
 - Dark editor-focused React UI with a searchable script explorer, starter snippets and a command palette.
@@ -41,6 +47,7 @@ Run the platform-independent native checks:
 dotnet run --project tests/VertexX.AuthChecks
 dotnet run --project tests/VertexX.UpdateChecks
 dotnet run --project tests/VertexX.RuntimeChecks
+dotnet run --project tests/VertexX.RobloxChecks
 ```
 
 The WPF application can be cross-compiled on Linux with `-p:EnableWindowsTargeting=true -p:PublishSingleFile=false` after building React. Windows install, WebView2 initialization, dialogs, real account login, update installation and uninstall still require native Windows testing. A passing cross-build or a browser test with a controlled host does not replace those checks. The installer is unsigned.

@@ -41,7 +41,7 @@ const server = http.createServer((req, res) => {
      case 'settings.save': return reply(message.payload);
      case 'auth.login': return reply({ message: 'Signed in as tester', account: { signedIn: true, username: 'tester' } });
      case 'auth.logout': return reply({ account: { signedIn: false } });
-     case 'roblox.lookup': return reply({ id: 1, name: 'Roblox', displayName: 'Roblox' });
+     case 'roblox.lookup': return reply({ id: 1, name: 'Roblox', displayName: 'Roblox', description: 'Public test biography', created: '2006-02-27T21:06:40Z', hasVerifiedBadge: true, avatarState: 'Completed', avatarDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=' });
      case 'updates.check': return reply({ version: '0.6.0', message: 'No complete published release is available yet.' });
      default: return reply(null);
     }
@@ -99,6 +99,40 @@ const server = http.createServer((req, res) => {
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   console.log('Account bridge passed');
+  await page.getByRole('button', { name: 'Roblox profiles', exact: false }).click();
+  await page.getByLabel('Roblox username').fill('Roblox');
+  await page.getByRole('button', { name: 'Find public profile', exact: true }).click();
+  await page.getByRole('img', { name: 'Roblox Roblox avatar' }).waitFor();
+  await page.getByText('Public test biography', { exact: true }).waitFor();
+  const previousRuns = await page.evaluate(() => window.__host.calls.filter(x => x.method === 'lua.run').length);
+  await page.getByRole('button', { name: 'Open FPS overlay', exact: true }).click();
+  await page.getByRole('tab', { name: 'VertexXFpsOverlay.client.lua' }).waitFor();
+  await page.getByRole('button', { name: 'Run script', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Roblox profiles & Studio tools' }).waitFor();
+  assert.equal(await page.evaluate(() => window.__host.calls.filter(x => x.method === 'lua.run').length), previousRuns, 'Studio script must not be sent to desktop Lua');
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await page.keyboard.press('Control+w');
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  const editor = page.getByRole('textbox', { name: 'Lua script editor' });
+  await editor.fill('pri');
+  await page.keyboard.press('Control+Space');
+  await page.locator('.cm-tooltip-autocomplete').waitFor();
+  await page.keyboard.press('Tab');
+  assert.equal(await editor.textContent(), 'print');
+  await page.keyboard.type('(');
+  assert.equal(await editor.textContent(), 'print()');
+  await page.keyboard.press('Escape');
+  await editor.fill('if true then');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Enter');
+  assert.match(await editor.textContent(), /if true then\n {4}$/);
+  await page.keyboard.press('Control+w');
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  console.log('Roblox profile, Studio FPS guard, completion Tab, bracket pairs and Enter indentation checked');
+
   await page.getByRole('button', { name: 'Updates', exact: true }).click();
   await page.getByRole('button', { name: 'Check for updates' }).click();
   await page.getByText('No complete published release is available yet.').waitFor();

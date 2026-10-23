@@ -1,4 +1,4 @@
-export type Preferences = { fontSize: number; wordWrap: boolean; autoUpdateEnabled: boolean; accent: string; theme: string; backgroundEffect: string; mouseEffect: string; effectIntensity: number; motionEnabled: boolean };
+export type Preferences = { fontSize: number; wordWrap: boolean; autoUpdateEnabled: boolean; accent: string; theme: string; backgroundEffect: string; mouseEffect: string; effectIntensity: number; motionEnabled: boolean; updateCheckMinutes: number };
 export type Account = { signedIn: boolean; username?: string; userId?: string };
 export type ScriptFile = { name: string; size: number; modified?: string };
 export type UpdateState = { version: string; pendingVersion?: string; message: string; hasError?: boolean };

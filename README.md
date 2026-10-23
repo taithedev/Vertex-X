@@ -61,3 +61,7 @@ The WPF application can be cross-compiled on Linux with `-p:EnableWindowsTargeti
 Run only trusted Lua. The in-process interpreter is not a secure memory/process isolation boundary, even with cooperative execution limits.
 
 See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.7.0.md).
+
+## v0.8.0 integration preview
+
+The community/accounts update is being prepared on a draft branch. See [preview validation and release blockers](docs/RELEASE_NOTES_0.8.0.md). New backend tables and the account API are deployed, but the new app has not been built or tested. Crystal-metered server execution remains gated off until runner validation. v0.7.0 remains the last built installer.

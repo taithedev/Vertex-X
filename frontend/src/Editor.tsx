@@ -23,7 +23,7 @@ export function Editor({ content, wrap, fontSize, onChange, onCursor }: { conten
  useEffect(() => {
    const editor = new EditorView({ parent: container.current!, state: EditorState.create({ doc: content, extensions: [
     lineNumbers(), foldGutter(), highlightActiveLine(), highlightActiveLineGutter(), history(), drawSelection(), rectangularSelection(),
-    indentOnInput(), indentUnit.of('    '), bracketMatching(), closeBrackets(), autocompletion({ override: [luaCompletions], activateOnTyping: true }), search({ top: true }), highlightSelectionMatches(), StreamLanguage.define(lua), syntaxHighlighting(colors),
+    indentOnInput(), indentUnit.of('    '), bracketMatching(), closeBrackets(), autocompletion({ override: [luaCompletions], activateOnTyping: true, interactionDelay: 0 }), search({ top: true }), highlightSelectionMatches(), StreamLanguage.define(lua), syntaxHighlighting(colors),
     Prec.high(keymap.of([{ key: 'Tab', run: acceptCompletion }, ...completionKeymap, ...closeBracketsKeymap])),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]), EditorState.tabSize.of(4),
     wrapping.current.of(wrap ? EditorView.lineWrapping : []),

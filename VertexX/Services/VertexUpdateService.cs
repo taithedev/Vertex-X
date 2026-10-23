@@ -27,7 +27,7 @@ public sealed class VertexUpdateService
     private string? _pendingHash;
 
     public static string CurrentVersion =>
-        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.6.0";
+        typeof(VertexUpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.6.1";
 
     public string? PendingVersion { get; private set; }
     public string StatusMessage { get; private set; } = "No update check yet.";

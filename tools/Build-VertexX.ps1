@@ -1,7 +1,7 @@
 # Build and optionally publish Vertex X using .NET 8 and NSIS. No Actions required.
 [CmdletBinding()]
 param(
-  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.6.0',
+  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.6.1',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'

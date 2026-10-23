@@ -1,12 +1,12 @@
 # Vertex X
 
-A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.0 beta**.
+A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.6.1 beta**.
 
-## Unreleased source update
+## New in 0.6.1
 
-The draft Roblox tools update adds an in-game FPS starter LocalScript, Roblox avatars/profile details, and CodeMirror Tab/Enter completions, paired brackets and snippets. The current downloadable installer is still v0.6.0; these source changes have **not** been compiled, browser-tested or tested in Roblox Studio because the execution environment is unavailable.
+Public Roblox avatars, bios, join dates and verified badges now appear in profile lookup. The editor adds Ctrl+Space suggestions, Tab/Enter acceptance, four-space indentation, paired brackets and snippets with Tab stops.
 
-For an FPS counter in a game you own, use [the Studio LocalScript and setup guide](roblox/README.md). In Vertex X, open **Roblox profiles & Studio tools**, choose **Open FPS overlay**, then copy it into a LocalScript under StarterPlayer → StarterPlayerScripts in Roblox Studio. Roblox APIs must be tested using Studio Play; the desktop Lua runner does not attach to Roblox.
+For FPS without Studio, open **Roblox profiles & FPS**. While playing Roblox, press **Win + G**, open **Performance**, select **FPS**, and pin the widget. Vertex X includes Game Bar and settings shortcuts. Windows measures the FPS; Vertex X does not attach its Lua runner to Roblox. Game Bar must be installed and enabled, and Windows may request access or a restart.
 
 ## Workspace
 
@@ -23,7 +23,7 @@ For an FPS counter in a game you own, use [the Studio LocalScript and setup guid
 
 Run `Build-VertexX.cmd` on Windows. The builder installs missing .NET 8 SDK, Node.js LTS and NSIS prerequisites through winget, installs locked npm dependencies, builds React, runs the account/update/runtime checks, publishes the self-contained Windows application, and packages it with NSIS.
 
-Output: `installer-output/VertexX-Setup-0.6.0-x64.exe` and `SHA256SUMS.txt`.
+Output: `installer-output/VertexX-Setup-0.6.1-x64.exe` and `SHA256SUMS.txt`.
 
 The app uses Microsoft WebView2 to render bundled React assets. Setup detects the runtime and installs Microsoft's signed Evergreen bootstrapper when needed. This prerequisite needs internet if WebView2 is not installed. The Windows builder verifies the bootstrapper's Microsoft Authenticode signature. No separate .NET runtime installation is required.
 
@@ -54,4 +54,4 @@ The WPF application can be cross-compiled on Linux with `-p:EnableWindowsTargeti
 
 Run only trusted Lua. The in-process interpreter is not a secure memory/process isolation boundary, even with cooperative execution limits.
 
-See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.6.0.md).
+See [integration details](docs/INTEGRATIONS.md) and [release notes](docs/RELEASE_NOTES_0.6.1.md).

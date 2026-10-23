@@ -230,6 +230,10 @@ public partial class MainWindow : Window
                 await _updates.CheckAsync(this, quietWhenCurrent: true, automatic: true);
                 return UpdateState();
             case "updates.page": Process.Start(new ProcessStartInfo("https://github.com/taithedev/Vertex-X/releases") { UseShellExecute = true }); return null;
+            case "performance.gamebar":
+                Process.Start(new ProcessStartInfo("ms-gamebar:") { UseShellExecute = true }); return null;
+            case "performance.settings":
+                Process.Start(new ProcessStartInfo("ms-settings:gaming-gamebar") { UseShellExecute = true }); return null;
             case "roblox.lookup":
                 return await _roblox.LookupAsync(Text(p, "username", 20));
             case "roblox.open":

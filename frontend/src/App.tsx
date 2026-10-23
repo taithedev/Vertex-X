@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { Code2, FolderOpen, Settings2, UserRound, ArrowUpRight, Search, Plus, Play, Square, Save, FileCode2, X, ChevronRight, ChevronDown, Terminal, RotateCw, Check, CheckCircle2, CircleAlert, ArrowDownToLine, Sparkles, Command, Copy, ExternalLink, Files, LogOut, Layers, Keyboard, PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-react';
 import { Editor } from './Editor';
-import { FPS_OVERLAY_SCRIPT, type RobloxProfile } from './roblox';
+import { type RobloxProfile } from './roblox';
 import { native, subscribe, isNative, type Preferences, type Account, type ScriptFile, type UpdateState, type Document } from './bridge';
 
-const VERSION = '0.6.0';
-const welcome = `-- Welcome to your new workspace.\n-- Create something worth running.\n\nlocal vertex = {\n    name = "Vertex X",\n    version = "0.6.0",\n    workspace = "local"\n}\n\nlocal function greet(name)\n    return string.format("Hello from %s!", name)\nend\n\nprint(greet(vertex.name))\nprint("Your next idea starts here.")\n\n-- Press F5 to run this script.\n-- Your scripts execute locally in the Lua runtime.\n`;
+const VERSION = '0.6.1';
+const welcome = `-- Welcome to your new workspace.\n-- Create something worth running.\n\nlocal vertex = {\n    name = "Vertex X",\n    version = "0.6.1",\n    workspace = "local"\n}\n\nlocal function greet(name)\n    return string.format("Hello from %s!", name)\nend\n\nprint(greet(vertex.name))\nprint("Your next idea starts here.")\n\n-- Press F5 to run this script.\n-- Your scripts execute locally in the Lua runtime.\n`;
 const snippets = [
- { name: 'Roblox FPS overlay', category: 'Roblox Studio · LocalScript', description: 'Measured in-game FPS and frame time. Install in StarterPlayerScripts.', code: FPS_OVERLAY_SCRIPT, file: 'VertexXFpsOverlay.client.lua' },
  { name: 'Hello, world', category: 'Getting started', description: 'Start with a simple message.', code: "-- Your first Lua script\nprint('Hello from Vertex X!')\n", file: 'hello-world.lua' },
  { name: 'Functions', category: 'Fundamentals', description: 'Write a reusable greeting function.', code: "local function greet(name)\n    return 'Hello, ' .. name\nend\n\nprint(greet('Tai'))\n", file: 'functions.lua' },
  { name: 'Tables & loops', category: 'Collections', description: 'Explore lists, keys, and iteration.', code: "local languages = { 'Lua', 'C#', 'TypeScript' }\n\nfor index, language in ipairs(languages) do\n    print(index .. '. ' .. language)\nend\n", file: 'tables.lua' },
@@ -142,7 +141,7 @@ export default function App() {
   if (running) return;
   const doc = docsRef.current.find(d => d.id === currentRef.current); if (!doc) return;
   if (doc.name.endsWith('.client.lua') || /\bgame\s*[:.]\s*GetService\b/.test(doc.content)) {
-   notify('This uses Roblox APIs. Paste it into a LocalScript in Roblox Studio and press Play there.');
+   notify('This script needs the Roblox game runtime. For FPS without Studio, use Windows Game Bar below.');
    setModal('roblox');
    return;
   }
@@ -197,7 +196,7 @@ export default function App() {
   {toast && <div className={'toast ' + (toast.error ? 'error' : '')} role="status">{toast.error ? <CircleAlert size={17}/> : <CheckCircle2 size={17}/>}<span>{toast.text}</span><button aria-label="Dismiss notification" onClick={() => setToast(null)}><X size={14}/></button></div>}
   {confirm && <Modal title="Keep your changes?" subtitle={confirm.name + ' has unsaved edits.'} onClose={() => confirm.resolve('cancel')}><div className="confirm-copy">Save your script before closing, or keep editing.</div><div className="modal-actions"><button className="text-button danger" onClick={() => confirm.resolve('discard')}>Discard changes</button><div><button data-autofocus className="secondary" onClick={() => confirm.resolve('cancel')}>Keep editing</button><button className="primary" onClick={() => confirm.resolve('save')}><Save size={14}/> Save script</button></div></div></Modal>}
   {modal === 'account' && !confirm && <Modal title={account.signedIn ? 'Your account' : 'Welcome to Vertex X'} subtitle={account.signedIn ? 'Your workspace, with a familiar name.' : 'A place for your ideas. Sign in with your Zuzify account.'} onClose={busy ? undefined : () => setModal(null)}>{account.signedIn ? <div className="account-summary"><div className="large-avatar">{(account.username || 'V').slice(0, 1).toUpperCase()}</div><h3>{account.username || 'Vertex member'}</h3><span>Signed in</span><p>Scripts and workspace recovery are stored on this device. Account sessions end when you close the app.</p><button className="secondary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await native<{ account: Account }>('auth.logout'); setAccount(result.account); setAuthMessage(''); } catch (e) { error(e); } finally { setBusy(false); } }}><LogOut size={14}/> Sign out</button></div> : <><div className="segmented"><button className={authMode === 'login' ? 'active' : ''} onClick={() => { setAuthMode('login'); setAuthMessage(''); }}>Sign in</button><button className={authMode === 'signup' ? 'active' : ''} onClick={() => { setAuthMode('signup'); setAuthMessage(''); }}>Create account</button></div><form className="form" onSubmit={authenticate}>{authMode === 'signup' && <label>Username<input name="username" autoComplete="username" placeholder="your_username" minLength={3} maxLength={20} pattern="[A-Za-z0-9_]{3,20}" required/></label>}<label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" maxLength={254} required/></label><label>Password<input name="password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder="Enter your password" minLength={authMode === 'signup' ? 8 : 1} maxLength={1024} required/></label>{authMessage && <div className="form-message" role="status">{authMessage}</div>}<button className="primary full" type="submit" disabled={busy}>{busy ? 'Please wait...' : authMode === 'login' ? 'Sign in to Vertex X' : 'Create your account'}<ArrowUpRight size={15}/></button><p className="form-footnote">Your password is handled by Supabase Auth. It is never saved in your scripts or workspace recovery.</p></form></>}</Modal>}
-  {modal === 'roblox' && !confirm && <Modal title="Roblox profiles & Studio tools" subtitle="Public profiles and scripts for games you create." onClose={busy ? undefined : () => setModal(null)}>
+  {modal === 'roblox' && !confirm && <Modal title="Roblox profiles & FPS" subtitle="Public avatars and Windows FPS tools." onClose={busy ? undefined : () => setModal(null)}>
    <form className="form" onSubmit={lookup}>
     <label>Roblox username<input name="username" placeholder="Username" defaultValue={roblox?.name || ''} minLength={3} maxLength={20} pattern="[A-Za-z0-9_]{3,20}" required/></label>
     <button disabled={busy} type="submit" className="primary full"><Search size={15}/>{busy ? 'Looking up...' : 'Find public profile'}</button>
@@ -216,16 +215,16 @@ export default function App() {
     </div>
    </>}
    <section className="studio-tools">
-    <h3><Terminal size={16}/> In-game FPS overlay</h3>
-    <p>Measures each player's rendered FPS and frame time in your own Roblox game.</p>
-    <ol><li>Open your game in Roblox Studio.</li><li>Create a <strong>LocalScript</strong> under <strong>StarterPlayer → StarterPlayerScripts</strong>.</li><li>Paste the overlay source, then press <strong>Play / F5 in Studio</strong>.</li></ol>
+    <h3><Terminal size={16}/> Windows FPS overlay</h3>
+    <p>Use Xbox Game Bar while playing Roblox. No Studio setup is needed.</p>
+    <ol><li>Open Roblox and join your game.</li><li>Press <strong>Win + G</strong>, then open <strong>Widgets → Performance</strong>.</li><li>Select <strong>FPS</strong> and pin the widget to keep it visible while playing.</li></ol>
     <div className="studio-tool-actions">
-     <button className="primary" onClick={() => { addDocument('VertexXFpsOverlay.client.lua', FPS_OVERLAY_SCRIPT); setModal(null); }}><Code2 size={14}/> Open FPS overlay</button>
-     <button className="secondary" onClick={() => void navigator.clipboard.writeText(FPS_OVERLAY_SCRIPT).then(() => notify('FPS overlay copied. Paste it into a Studio LocalScript.')).catch(error)}><Copy size={14}/> Copy script</button>
+     <button className="primary" onClick={() => void native('performance.gamebar').catch(error)}><Terminal size={14}/> Open Game Bar</button>
+     <button className="secondary" onClick={() => void native('performance.settings').catch(error)}><Settings2 size={14}/> Game Bar settings</button>
     </div>
-    <small>F8 or the in-game FPS button toggles the panel. It also works with touch.</small>
+    <small>If Windows asks for FPS access, follow its prompt and restart your PC. Game Bar must be installed and enabled. FPS is measured by Windows, not by the Vertex X Lua runner.</small>
    </section>
-   <div className="profile-note">Public lookup is not a verified account link. Roblox scripts run in Studio or a published game; Vertex X's Run button runs desktop Lua.</div>
+   <div className="profile-note">Public lookup is not a verified account link. Vertex X runs desktop Lua; Roblox APIs require the Roblox game runtime.</div>
   </Modal>}
   {modal === 'commands' && !confirm && <Modal title="Find your next action" onClose={() => setModal(null)}><label className="command-input"><Search size={17}/><input aria-label="Search commands" placeholder="Type a command or filename..." value={commandQuery} onChange={e => setCommandQuery(e.target.value)}/></label><div className="command-results">{commands.map((cmd, i) => <button key={cmd.name + i} onClick={() => { setModal(null); cmd.action(); }}><Command size={15}/><span>{cmd.name}</span><kbd>{cmd.shortcut}</kbd></button>)}{!commands.length && <div className="no-commands">No matching files or commands.</div>}</div></Modal>}
  </div>;

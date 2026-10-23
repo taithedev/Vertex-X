@@ -2,6 +2,12 @@
 
 A Windows Lua workspace with a React interface and a native C# / WPF host. Current version: **0.7.0 beta**.
 
+## Interface Preview
+
+![Vertex X — dark UI showcase](docs/images/wide_high_detail_render_of_a_futuristic_dark_them.png)
+
+*A concept showcase of the Vertex X interface, featuring the dark editor, purple accents, and soft bloom lighting.*
+
 ## New in 0.7.0
 
 - Eight full dark themes and eight accents with live preview, save/revert and reset controls.

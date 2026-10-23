@@ -8,7 +8,7 @@ Supabase Auth owns password hashing. Signup takes a profile username, email, and
 ## Installer and release publishing
 The default installer is now NSIS (`installer/VertexX.nsi`). The older Inno Setup script is retained as a historical alternative and is not used by the builder. The .NET runtime is included in the installation folder. React assets are bundled locally; Microsoft WebView2 renders them. Setup installs the official Evergreen WebView2 bootstrapper if the runtime is missing, requiring internet for that prerequisite. The generated uninstall manifest lists only files from the built payload, preserving unrelated user files.
 
-`Build-VertexX.cmd` builds the React UI and native host, runs account/update/Lua runtime/profile regression checks, packages setup, and writes SHA256SUMS.txt. `Publish-VertexX-Release.cmd` requires a committed Git checkout and authenticated GitHub CLI, uploads a draft beta containing both assets, then publishes it. No GitHub Actions are used.
+`Build-VertexX.cmd` builds the React UI and native host, runs account/update/Lua runtime/profile/library regression checks, packages setup, and writes SHA256SUMS.txt. `Publish-VertexX-Release.cmd` requires a committed Git checkout and authenticated GitHub CLI, uploads a draft beta containing both assets, then publishes it. No GitHub Actions are used.
 
 ## Updates
 The client checks complete published GitHub Releases, including beta prereleases. It verifies the expected installer filename, release download origin, maximum download size, and SHA-256 hash. Updates install on normal exit using NSIS `/S /UPDATEPID=<pid>`. Setup waits up to 30 seconds for that process. Drafts and releases without the installer/checksum pair are skipped. Checksums detect corruption; these builds are unsigned.
@@ -20,3 +20,6 @@ Public profile lookup uses Roblox's public API. It does not verify account owner
 
 ## Verification boundary
 The application and installer are built and inspected in a Linux environment. Account HTTP response handling has regression coverage, and the live Supabase Auth endpoint and database permissions were checked. Windows UI execution, live user signup with email confirmation, and a complete native Windows upgrade cycle remain unverified. Browser contract checks use a controlled host and do not replace native Windows verification.
+
+## Appearance and script library
+Appearance preferences are normalized and stored in the native local settings file. Old settings receive defaults for new fields. Effects do not fetch remote assets or send pointer data anywhere; animation stays in one canvas with no per-frame React state. The library creates named UTF-8 copies without overwriting an existing file. Renderer requests cannot supply arbitrary shortcut commands: the shortcut target is fixed to the installed VertexX.exe.

@@ -7,12 +7,21 @@ namespace VertexX;
 public sealed record LuaRunResult(string Output, long ElapsedMs, bool Truncated);
 public static class VertexLuaRuntime
 {
-    public static LuaRunResult Run(string code, CancellationToken cancellationToken, TimeSpan? timeout = null)
+    public static LuaRunResult Run(string code, CancellationToken cancellationToken, TimeSpan? timeout = null, Action<string>? onOutput = null)
     {
         if (code.Length > 1_000_000) throw new ArgumentException("Scripts must be smaller than 1 MB.");
         var clock = Stopwatch.StartNew();
         var output = new StringBuilder();
         var truncated = false;
+        var sent = 0;
+        long lastOutput = 0;
+        void Flush(bool force = false)
+        {
+            if (onOutput == null || output.Length == sent || (!force && clock.ElapsedMilliseconds - lastOutput < 50)) return;
+            onOutput(output.ToString(sent, output.Length - sent));
+            sent = output.Length;
+            lastOutput = clock.ElapsedMilliseconds;
+        }
         var limit = timeout ?? TimeSpan.FromSeconds(5);
         var script = new Script(CoreModules.Preset_HardSandbox);
         script.Options.DebugPrint = line =>
@@ -23,6 +32,7 @@ public static class VertexLuaRuntime
             var remaining = Math.Max(0, 100_000 - output.Length);
             output.Append(text.AsSpan(0, Math.Min(remaining, text.Length)));
             truncated |= text.Length > remaining;
+            Flush();
         };
         cancellationToken.ThrowIfCancellationRequested();
         try
@@ -44,10 +54,12 @@ public static class VertexLuaRuntime
             output.Append(text.AsSpan(0, Math.Min(remaining, text.Length)));
             truncated |= text.Length > remaining;
         }
+        Flush(true);
         return new LuaRunResult(output.ToString(), clock.ElapsedMilliseconds, truncated);
         }
         catch (Exception ex)
         {
+            Flush(true);
             ex.Data["VertexX.Output"] = output.ToString();
             throw;
         }

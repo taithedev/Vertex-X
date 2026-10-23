@@ -5,7 +5,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef MyAppVersion
-!define MyAppVersion "0.6.1"
+!define MyAppVersion "0.7.0"
 !endif
 !ifndef PayloadDir
 !define PayloadDir "..\publish"

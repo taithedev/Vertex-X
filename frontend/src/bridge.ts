@@ -1,6 +1,6 @@
-export type Preferences = { fontSize: number; wordWrap: boolean; autoUpdateEnabled: boolean; accent: string };
+export type Preferences = { fontSize: number; wordWrap: boolean; autoUpdateEnabled: boolean; accent: string; theme: string; backgroundEffect: string; mouseEffect: string; effectIntensity: number; motionEnabled: boolean };
 export type Account = { signedIn: boolean; username?: string; userId?: string };
-export type ScriptFile = { name: string; size: number };
+export type ScriptFile = { name: string; size: number; modified?: string };
 export type UpdateState = { version: string; pendingVersion?: string; message: string; hasError?: boolean };
 export type Document = { id: string; name: string; content: string; saved?: boolean; baseline: string };
 type NativeMessage = { id?: string; ok?: boolean; result?: unknown; error?: string; output?: string; type?: string; data?: unknown };

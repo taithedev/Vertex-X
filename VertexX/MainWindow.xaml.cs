@@ -55,7 +55,7 @@ public partial class MainWindow : Window
             Directory.CreateDirectory(_library);
             try { _preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(Path.Combine(_data, "settings.json")), Json) ?? new(); } catch { }
             try { _paths = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(_data, "documents.json"))) ?? new(); } catch { }
-            _preferences.FontSize = double.IsFinite(_preferences.FontSize) ? Math.Clamp(_preferences.FontSize, 10, 24) : 14;
+            _preferences.Normalize();
             if (Web.CoreWebView2 == null)
             {
                 var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_data, "WebView2"));
@@ -116,7 +116,7 @@ public partial class MainWindow : Window
             var result = await HandleAsync(method ?? "", payload);
             Send(new { id, ok = true, result });
         }
-        catch (Exception ex) { Send(new { id, ok = false, error = ex is OperationCanceledException ? "Execution stopped." : ex.Message, output = ex.Data["VertexX.Output"] as string }); }
+        catch (Exception ex) { Send(new { id, ok = false, error = ex is OperationCanceledException ? "Execution stopped." : ex is MoonSharp.Interpreter.InterpreterException luaError ? luaError.DecoratedMessage ?? luaError.Message : ex.Message, output = ex.Data["VertexX.Output"] as string }); }
     }
     private static string Text(JsonElement p, string name, int limit = 1_000_000)
     {
@@ -142,7 +142,7 @@ public partial class MainWindow : Window
         File.WriteAllText(temporary, content, new UTF8Encoding(false));
         File.Move(temporary, path, true);
     }
-    private object Library() => Directory.EnumerateFiles(_library).Where(p => new[] { ".lua", ".txt" }.Contains(Path.GetExtension(p).ToLowerInvariant())).OrderBy(Path.GetFileName).Select(p => new { name = Path.GetFileName(p), size = new FileInfo(p).Length }).ToArray();
+    private object Library() => Directory.EnumerateFiles(_library).Where(p => new[] { ".lua", ".txt" }.Contains(Path.GetExtension(p).ToLowerInvariant())).OrderBy(Path.GetFileName).Select(p => new { name = Path.GetFileName(p), size = new FileInfo(p).Length, modified = File.GetLastWriteTimeUtc(p).ToString("O") }).ToArray();
     private async Task<object?> HandleAsync(string method, JsonElement p)
     {
         switch (method)
@@ -155,15 +155,38 @@ public partial class MainWindow : Window
                 return new { version = VertexUpdateService.CurrentVersion, preferences = _preferences, account = Account(), library = Library() };
             case "app.close": _allowClose = true; Close(); return null;
             case "app.cancelClose": _closeRequested = false; return null;
+            case "app.shortcut":
+                var shellType = Type.GetTypeFromProgID("WScript.Shell") ?? throw new InvalidOperationException("Windows shortcut support is unavailable.");
+                dynamic shell = Activator.CreateInstance(shellType)!;
+                try
+                {
+                    dynamic shortcut = shell.CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Vertex X.lnk"));
+                    try
+                    {
+                        shortcut.TargetPath = Path.Combine(AppContext.BaseDirectory, "VertexX.exe");
+                        shortcut.WorkingDirectory = AppContext.BaseDirectory;
+                        shortcut.Description = "Vertex X Lua workspace";
+                        shortcut.Save();
+                    }
+                    finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut); }
+                }
+                finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+                return null;
             case "files.list": return Library();
             case "files.folder": Process.Start(new ProcessStartInfo("explorer.exe", "\"" + _library + "\"") { UseShellExecute = true }); return null;
             case "files.open":
             case "files.library":
             case "files.save":
+            case "library.save":
             {
                 if (!await _fileGate.WaitAsync(0)) throw new InvalidOperationException("Finish the current file dialog first.");
                 try
                 {
+                    if (method == "library.save")
+                    {
+                        var libraryPath = new VertexScriptLibrary(_library).SaveCopy(Text(p, "name", 180), Text(p, "content"));
+                        return Document(libraryPath);
+                    }
                     if (method == "files.open")
                     {
                         var dialog = new OpenFileDialog { Filter = "Scripts (*.lua;*.txt)|*.lua;*.txt", Multiselect = true, InitialDirectory = _library };
@@ -172,8 +195,7 @@ public partial class MainWindow : Window
                     if (method == "files.library")
                     {
                         var name = Text(p, "name", 255);
-                        if (name != Path.GetFileName(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new ArgumentException("Invalid filename.");
-                        return Document(Path.Combine(_library, name));
+                        return Document(new VertexScriptLibrary(_library).Resolve(name));
                     }
                     var id = Text(p, "id", 80);
                     if (!Guid.TryParse(id, out _)) throw new ArgumentException("Invalid document.");
@@ -200,14 +222,19 @@ public partial class MainWindow : Window
                 var code = Text(p, "code");
                 using var cancellation = new CancellationTokenSource();
                 _execution = cancellation;
-                try { return await Task.Run(() => VertexLuaRuntime.Run(code, cancellation.Token)); }
+                try
+                {
+                    var runId = p.TryGetProperty("runId", out var run) && run.ValueKind == JsonValueKind.String ? run.GetString() : null;
+                    return await Task.Run(() => VertexLuaRuntime.Run(code, cancellation.Token, onOutput: text =>
+                        Dispatcher.BeginInvoke(new Action(() => Send(new { type = "lua.output", data = new { runId, text } })))));
+                }
                 finally { _execution = null; }
             }
             case "lua.stop": _execution?.Cancel(); return null;
             case "settings.save":
                 var prefs = p.Deserialize<Preferences>(Json) ?? throw new ArgumentException("Invalid preferences.");
                 prefs.FontSize = double.IsFinite(prefs.FontSize) ? Math.Clamp(prefs.FontSize, 10, 24) : 14;
-                if (prefs.Accent is not ("violet" or "mint" or "ice")) prefs.Accent = "violet";
+                prefs.Normalize();
                 AtomicWrite(Path.Combine(_data, "settings.json"), JsonSerializer.Serialize(prefs, Json));
                 _preferences = prefs;
                 return _preferences;
@@ -273,4 +300,18 @@ public sealed class Preferences
     public bool WordWrap { get; set; }
     public bool AutoUpdateEnabled { get; set; } = true;
     public string Accent { get; set; } = "violet";
+    public string Theme { get; set; } = "graphite";
+    public string BackgroundEffect { get; set; } = "aurora";
+    public string MouseEffect { get; set; } = "glow";
+    public double EffectIntensity { get; set; } = 35;
+    public bool MotionEnabled { get; set; } = true;
+    public void Normalize()
+    {
+        FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 10, 24) : 14;
+        EffectIntensity = double.IsFinite(EffectIntensity) ? Math.Clamp(EffectIntensity, 0, 100) : 35;
+        if (Accent is not ("violet" or "mint" or "ice" or "rose" or "amber" or "cyan" or "lime" or "white")) Accent = "violet";
+        if (Theme is not ("graphite" or "oled" or "midnight" or "ocean" or "forest" or "rose" or "lavender" or "amber")) Theme = "graphite";
+        if (BackgroundEffect is not ("off" or "aurora" or "particles" or "grid" or "stars" or "waves")) BackgroundEffect = "off";
+        if (MouseEffect is not ("off" or "glow" or "trail" or "ripple")) MouseEffect = "off";
+    }
 }

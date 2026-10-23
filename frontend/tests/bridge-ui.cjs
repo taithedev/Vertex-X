@@ -22,29 +22,35 @@ const server = http.createServer((req, res) => {
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
    const listeners = [];
-   window.__host = { calls: [], replies: [], cancelSave: false, delayRun: false, pendingRun: null };
+   window.__host = { calls: [], replies: [], cancelSave: false, delayRun: false, pendingRun: null, library: [{ name: 'native.lua', size: 20, modified: '2026-10-01T00:00:00Z' }], savedLibrary: null };
    window.__emit = message => listeners.forEach(listener => listener({ data: message }));
    window.chrome = { webview: { addEventListener: (_name, listener) => listeners.push(listener), postMessage: message => {
     const host = window.__host;
     host.calls.push(message);
     const reply = (result, error) => setTimeout(() => { host.replies.push({ method: message.method, result, error }); window.__emit({ id: message.id, ok: !error, result, error }); }, 5);
-    const prefs = { fontSize: 14, wordWrap: false, autoUpdateEnabled: true, accent: 'violet' };
+    const prefs = JSON.parse(localStorage.getItem('test.preferences') || 'null') || { fontSize: 14, wordWrap: false, autoUpdateEnabled: true, accent: 'violet' };
     const file = { id: '99999999-9999-4999-8999-999999999999', name: 'native.lua', content: "print('native-file')", baseline: "print('native-file')" };
     switch (message.method) {
-     case 'app.ready': return reply({ version: '0.6.1', preferences: prefs, account: { signedIn: false }, library: [{ name: 'native.lua', size: 20 }] });
-     case 'files.list': return reply([{ name: 'native.lua', size: 20 }]);
+     case 'app.ready': return reply({ version: '0.7.0', preferences: prefs, account: { signedIn: false }, library: host.library });
+     case 'files.list': return reply(host.library);
      case 'files.open': return reply([file]);
-     case 'files.library': return reply(file);
+     case 'files.library': return reply(message.payload.name === host.savedLibrary?.name ? host.savedLibrary : file);
+     case 'library.save': {
+      if (host.library.some(f => f.name === message.payload.name)) return reply(null, 'A script with this name already exists.');
+      host.savedLibrary = { id: '88888888-8888-4888-8888-888888888888', ...message.payload, saved: true };
+      host.library.push({ name: message.payload.name, size: message.payload.content.length, modified: new Date().toISOString() });
+      return reply(host.savedLibrary);
+     }
      case 'files.save': if (host.cancelSave) { host.cancelSave = false; return reply(null); } return reply({ ...message.payload, name: message.payload.name, saved: true });
-     case 'lua.run': if (host.delayRun) { host.pendingRun = () => reply(null, 'Execution stopped.'); return; } return reply({ output: 'bridge-output', elapsedMs: 3, truncated: false });
+     case 'lua.run': if (host.delayRun) { window.__emit({ type: 'lua.output', data: { runId: message.payload.runId, text: 'streaming-before-stop' } }); host.pendingRun = () => reply(null, 'Execution stopped.'); return; } return reply({ output: 'bridge-output', elapsedMs: 3, truncated: false });
      case 'lua.stop': host.pendingRun?.(); host.pendingRun = null; return reply(null);
-     case 'settings.save': return reply(message.payload);
+     case 'settings.save': localStorage.setItem('test.preferences', JSON.stringify(message.payload)); return reply(message.payload);
      case 'auth.login': return reply({ message: 'Signed in as tester', account: { signedIn: true, username: 'tester' } });
      case 'auth.logout': return reply({ account: { signedIn: false } });
      case 'performance.gamebar':
      case 'performance.settings': return reply(null);
      case 'roblox.lookup': return reply({ id: 1, name: 'Roblox', displayName: 'Roblox', description: 'Public test biography', created: '2006-02-27T21:06:40Z', hasVerifiedBadge: true, avatarState: 'Completed', avatarDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=' });
-     case 'updates.check': return reply({ version: '0.6.1', message: 'No complete published release is available yet.' });
+     case 'updates.check': return reply({ version: '0.7.0', message: 'No complete published release is available yet.' });
      default: return reply(null);
     }
    } } };
@@ -65,6 +71,7 @@ const server = http.createServer((req, res) => {
   assert.equal(await page.evaluate(() => window.__host.calls.find(x => x.method === 'lua.run').payload.code), 'print("bridge check")');
   await page.evaluate(() => window.__host.delayRun = true);
   await page.getByRole('button', { name: 'Run script', exact: true }).click();
+  await page.getByText('streaming-before-stop', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Stop script', exact: true }).click();
   await page.getByText('Execution stopped.', { exact: true }).waitFor();
   await page.evaluate(() => window.__host.delayRun = false);
@@ -93,6 +100,43 @@ const server = http.createServer((req, res) => {
   await page.locator('.accent-mint').waitFor();
   assert.equal(await page.evaluate(() => window.__host.calls.find(x => x.method === 'settings.save').payload.wordWrap), true);
   console.log('Settings bridge passed');
+  const themeColors = [];
+  for (const theme of ['graphite','oled','midnight','ocean','forest','rose','lavender','amber']) {
+   await page.getByRole('button', { name: theme + ' theme', exact: true }).click();
+   assert(await page.locator('.app').evaluate((el, theme) => el.classList.contains('theme-' + theme), theme));
+   themeColors.push(await page.locator('.app').evaluate(el => getComputedStyle(el).backgroundColor));
+  }
+  assert.equal(new Set(themeColors).size, 8, 'Each theme must change the workspace surface');
+  await page.getByRole('button', { name: 'ocean theme', exact: true }).click();
+  for (const effect of ['aurora','particles','grid','stars','waves']) {
+   await page.getByLabel('Background effect', { exact: true }).selectOption(effect);
+   assert.equal(await page.locator('canvas').getAttribute('data-effect'), effect);
+   await page.waitForTimeout(90);
+   assert(await page.locator('canvas').evaluate(el => el.getContext('2d').getImageData(0,0,el.width,el.height).data.some((v,i) => i % 4 === 3 && v > 0)), 'Background must draw pixels');
+
+  }
+  for (const effect of ['glow','trail','ripple']) {
+   await page.getByLabel('Mouse effect', { exact: true }).selectOption(effect);
+   await page.mouse.move(900,90); await page.mouse.click(900,90);
+  }
+  await page.getByLabel('Mouse effect', { exact: true }).selectOption('glow');
+  await page.getByLabel('Background effect', { exact: true }).selectOption('aurora');
+  await page.getByRole('button', { name: 'cyan accent', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForTimeout(90);
+  assert.equal(await page.locator('canvas').isVisible(), false);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.getByRole('switch', { name: 'Animated effects', exact: true }).click();
+  await page.waitForTimeout(90);
+  assert(await page.locator('canvas').evaluate(el => !el.getContext('2d').getImageData(0,0,el.width,el.height).data.some((v,i) => i % 4 === 3 && v > 0)));
+  await page.getByRole('switch', { name: 'Animated effects', exact: true }).click();
+  await page.getByRole('button', { name: 'Save preferences', exact: true }).click();
+  await page.waitForFunction(() => window.__host.calls.filter(x => x.method === 'settings.save').length === 2);
+  await page.getByRole('button', { name: 'Create shortcut', exact: true }).click();
+  await page.waitForFunction(() => window.__host.calls.some(x => x.method === 'app.shortcut'));
+  await page.locator('.settings-page').evaluate(el => el.scrollTop = 0);
+  await page.screenshot({ path: '/tmp/vertex070-settings.png' });
+  console.log('Eight themes, five backgrounds, pointer effects and shortcut bridge passed');
   await page.getByRole('button', { name: 'Open account' }).click();
   await page.getByLabel('Email address').fill('test@example.invalid');
   await page.getByLabel('Password', { exact: true }).fill('test-password');
@@ -127,6 +171,20 @@ const server = http.createServer((req, res) => {
   await page.keyboard.press('Escape');
   await page.keyboard.press('Enter');
   assert.equal((await editor.locator('.cm-line').allTextContents()).join('\n'), 'if true then\n    ');
+  await editor.fill('local value = 1');
+  await editor.press('Home');
+  await editor.press('Tab');
+  assert.equal(await editor.textContent(), '    local value = 1');
+  await editor.press('Shift+Tab');
+  assert.equal(await editor.textContent(), 'local value = 1');
+  await editor.fill('ifblock');
+  await editor.press('Control+Space');
+  await page.locator('.cm-tooltip-autocomplete').waitFor();
+  await editor.press('Tab');
+  await page.keyboard.type('true');
+  await editor.press('Tab');
+  await page.keyboard.type('print(1)');
+  assert.match((await editor.locator('.cm-line').allTextContents()).join('\n'), /if true then\n +print\(1\)\nend/);
   await editor.fill('game:GetService("Players")');
   const previousRuns = await page.evaluate(() => window.__host.calls.filter(x => x.method === 'lua.run').length);
   await page.getByRole('button', { name: 'Run script', exact: true }).click();
@@ -136,6 +194,37 @@ const server = http.createServer((req, res) => {
   await page.keyboard.press('Control+w');
   await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
   console.log('Roblox profile, Windows FPS launch commands, completion Tab, bracket pairs and Enter indentation checked');
+
+  await page.getByRole('button', { name: 'Script library', exact: true }).click();
+  await page.getByRole('button', { name: 'Save current script', exact: true }).click();
+  await page.getByLabel('Script filename').fill('native.lua');
+  await page.getByRole('button', { name: 'Save library copy', exact: true }).click();
+  await page.getByRole('alert').getByText('A script with this name already exists.').waitFor();
+  await page.getByLabel('Script filename').fill('my-library.lua');
+  await page.getByRole('button', { name: 'Save library copy', exact: true }).click();
+  await page.getByRole('tab', { name: 'my-library.lua', exact: true }).waitFor();
+  await page.getByRole('textbox', { name: 'Lua script editor' }).fill('print("unsaved-library-edit")');
+  await page.getByRole('button', { name: 'Script library', exact: true }).click();
+  await page.getByLabel('Search script library').fill('my-library');
+  assert.equal(await page.locator('.saved-list>button').count(), 1);
+  await page.getByRole('button', { name: 'my-library.lua', exact: false }).last().click();
+  assert.equal(await page.getByRole('textbox', { name: 'Lua script editor' }).textContent(), 'print("unsaved-library-edit")');
+  const selectedTab = await page.getByRole('tab', { selected: true }).textContent();
+  await page.keyboard.press('Control+Tab');
+  assert.notEqual(await page.getByRole('tab', { selected: true }).textContent(), selectedTab);
+  await page.keyboard.press('Control+Shift+Tab');
+  assert.equal(await page.getByRole('tab', { selected: true }).textContent(), selectedTab);
+  const selectedEditor = page.getByRole('textbox', { name: 'Lua script editor' });
+  await selectedEditor.fill('print("selection-only")\nerror("must-not-run")');
+  await selectedEditor.press('Control+Home');
+  await selectedEditor.press('Shift+End');
+  await selectedEditor.press('Control+Enter');
+  await page.waitForFunction(() => window.__host.calls.some(x => x.method === 'lua.run' && x.payload.code === 'print("selection-only")'));
+  await page.getByRole('button', { name: 'Run script', exact: true }).waitFor();
+  await page.screenshot({ path: '/tmp/vertex070-editor.png' });
+  await page.keyboard.press('Control+w');
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  console.log('Library save/collision/search, dirty-tab preservation, tab cycling and selection execution passed');
 
   await page.getByRole('button', { name: 'Updates', exact: true }).click();
   await page.getByRole('button', { name: 'Check for updates' }).click();
@@ -147,6 +236,7 @@ const server = http.createServer((req, res) => {
   await page.getByRole('textbox', { name: 'Lua script editor' }).fill('print("recovered")');
   await page.waitForTimeout(350);
   await page.reload();
+  assert(await page.locator('.app.theme-ocean.accent-cyan').count() === 1, 'Appearance should load from saved preferences');
   await page.getByRole('tab', { name: 'native.lua' }).click();
   assert.equal(await page.getByRole('textbox', { name: 'Lua script editor' }).textContent(), 'print("recovered")');
   await page.evaluate(() => window.__emit({ type: 'request-close' }));

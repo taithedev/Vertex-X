@@ -15,4 +15,15 @@ using var midRun = new CancellationTokenSource();
 var task = Task.Run(() => VertexLuaRuntime.Run("while true do end", midRun.Token));
 midRun.CancelAfter(75);
 try { await task; throw new Exception("Running script was not cancelled."); } catch (OperationCanceledException) { }
+var streamed = new System.Text.StringBuilder();
+var streamedResult = VertexLuaRuntime.Run("for i=1,1000 do print(i) end; return 'done'", CancellationToken.None, onOutput: text => streamed.Append(text));
+if (streamed.ToString() != streamedResult.Output) throw new Exception("Streamed output differs from final output.");
+streamed.Clear();
+var cappedStream = VertexLuaRuntime.Run("for i=1,10000 do print(string.rep('x',100)) end", CancellationToken.None, onOutput: text => streamed.Append(text));
+if (streamed.Length > 100000 || streamed.ToString() != cappedStream.Output) throw new Exception("Stream cap failed.");
+streamed.Clear();
+try { VertexLuaRuntime.Run("print('stream-before-error'); error('fail')", CancellationToken.None, onOutput: text => streamed.Append(text)); }
+catch (ScriptRuntimeException) { }
+if (!streamed.ToString().Contains("stream-before-error")) throw new Exception("Stream before error was lost.");
+Console.WriteLine("PASS: streamed output, return values, capped stream and output before failure.");
 Console.WriteLine("PASS: Lua output/returns, endless-loop time limit, cancellation before and during execution, output cap, syntax errors, output before failure.");

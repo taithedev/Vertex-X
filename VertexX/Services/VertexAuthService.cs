@@ -18,6 +18,15 @@ public sealed class VertexAuthService
     private readonly HttpClient Client;
     public VertexAuthService() : this(DefaultClient) { }
     internal VertexAuthService(HttpClient client) { Client = client; }
+    private string? _refreshToken;
+    private DateTimeOffset _expiresAt = DateTimeOffset.MaxValue;
+    private int _sessionGeneration;
+    private readonly System.Threading.SemaphoreSlim _refreshGate = new(1, 1);
+    private void CaptureSession(JsonElement root)
+    {
+        _refreshToken = root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null;
+        _expiresAt = DateTimeOffset.UtcNow.AddSeconds(root.TryGetProperty("expires_in", out var expiry) && expiry.TryGetInt32(out var seconds) ? seconds : 3600);
+    }
     public string? AccessToken { get; private set; }
     public string? UserId { get; private set; }
     public string? Username { get; private set; }
@@ -43,6 +52,7 @@ public sealed class VertexAuthService
                     if (json.RootElement.TryGetProperty("msg", out var msg)) error = msg.GetString() ?? error;
                     if (json.RootElement.TryGetProperty("error_description", out var detail)) error = detail.GetString() ?? error;
                     if (json.RootElement.TryGetProperty("message", out var message)) error = message.GetString() ?? error;
+                    if (json.RootElement.TryGetProperty("error", out var cloudError) && cloudError.ValueKind == JsonValueKind.String) error = cloudError.GetString() ?? error;
                 } catch { }
                 throw new InvalidOperationException(error);
             }
@@ -53,6 +63,7 @@ public sealed class VertexAuthService
 
     public async Task<string> SignUpAsync(string username, string email, string password)
     {
+        SignOut();
         username = username.Trim();
         if (!Regex.IsMatch(username, "^[A-Za-z0-9_]{3,20}$"))
             throw new ArgumentException("Username must be 3–20 letters, numbers, or underscores.");
@@ -72,6 +83,7 @@ public sealed class VertexAuthService
         if (root.TryGetProperty("access_token", out var token) && token.ValueKind == JsonValueKind.String)
         {
             AccessToken = token.GetString();
+            CaptureSession(root);
             UserId = user.GetProperty("id").GetString();
             Username = username;
             try { await EnsureProfileAsync(username); }
@@ -89,6 +101,7 @@ public sealed class VertexAuthService
         using var result = await SendAsync(request);
         var root = result.RootElement;
         AccessToken = root.GetProperty("access_token").GetString();
+        CaptureSession(root);
         var user = root.GetProperty("user");
         UserId = user.GetProperty("id").GetString();
         if (user.TryGetProperty("user_metadata", out var meta) && meta.TryGetProperty("vertexx_username", out var name))
@@ -110,9 +123,65 @@ public sealed class VertexAuthService
         using var _ = await SendAsync(request);
     }
 
+
+    private async Task RequireSessionAsync()
+    {
+        await _refreshGate.WaitAsync();
+        try
+        {
+            if (AccessToken == null) throw new InvalidOperationException("Sign in to use community features and crystals.");
+            if (_expiresAt > DateTimeOffset.UtcNow.AddMinutes(2)) return;
+            if (_refreshToken == null) { SignOut(); throw new InvalidOperationException("Your session expired. Sign in again."); }
+            var generation = _sessionGeneration;
+            using var request = Request(HttpMethod.Post, "/auth/v1/token?grant_type=refresh_token");
+            request.Content = new StringContent(JsonSerializer.Serialize(new { refresh_token = _refreshToken }), Encoding.UTF8, "application/json");
+            using var result = await SendAsync(request);
+            if (generation != _sessionGeneration) throw new InvalidOperationException("The account session changed.");
+            AccessToken = result.RootElement.GetProperty("access_token").GetString();
+            CaptureSession(result.RootElement);
+        }
+        finally { _refreshGate.Release(); }
+    }
+    public async Task<object> CloudSessionAsync()
+    {
+        await RequireSessionAsync();
+        return new { accessToken = AccessToken, userId = UserId, expiresAt = _expiresAt, url = BaseUrl, publishableKey = PublishableKey };
+    }
+    public async Task<JsonElement> CloudRequestAsync(string action, object data)
+    {
+        await RequireSessionAsync();
+        using var request = Request(HttpMethod.Post, "/functions/v1/vertexx-api", AccessToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(new { action, data }), Encoding.UTF8, "application/json");
+        using var result = await SendAsync(request);
+        return result.RootElement.Clone();
+    }
+    public async Task ChangePasswordAsync(string password)
+    {
+        if (password.Length < 12 || password.Length > 1024) throw new ArgumentException("Use a password with at least 12 characters.");
+        await RequireSessionAsync();
+        using var request = Request(HttpMethod.Put, "/auth/v1/user", AccessToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(new { password }), Encoding.UTF8, "application/json");
+        using var result = await SendAsync(request);
+    }
+    public async Task<bool> SignOutRemoteAsync()
+    {
+        var token = AccessToken;
+        SignOut();
+        if (token == null) return true;
+        try
+        {
+            using var request = Request(HttpMethod.Post, "/auth/v1/logout?scope=local", token);
+            using var result = await SendAsync(request);
+            return true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException) { return false; }
+    }
     public void SignOut()
     {
         // Access token is deliberately memory-only and not persisted to disk.
+        _sessionGeneration++;
+        _refreshToken = null;
+        _expiresAt = DateTimeOffset.MinValue;
         AccessToken = null;
         UserId = null;
         Username = null;

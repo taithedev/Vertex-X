@@ -1,0 +1,1 @@
+{"name":"vertexx-runner-checks","private":true,"type":"module","scripts":{"test":"node checks.mjs"},"dependencies":{"fengari":"0.1.5"}}

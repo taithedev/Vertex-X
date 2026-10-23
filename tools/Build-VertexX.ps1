@@ -1,7 +1,7 @@
 # Build and optionally publish Vertex X using .NET 8 and NSIS. No Actions required.
 [CmdletBinding()]
 param(
-  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.7.0',
+  [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.8.0',
   [switch]$Publish
 )
 $ErrorActionPreference = 'Stop'
@@ -33,6 +33,10 @@ try {
   & npm.cmd run build
   if ($LASTEXITCODE -ne 0) { throw 'React UI build failed.' }
 } finally { Pop-Location }
+& npm.cmd ci --prefix (Join-Path $root 'supabase\tests\runner')
+if ($LASTEXITCODE -ne 0) { throw 'Cloud runner dependency installation failed.' }
+& npm.cmd test --prefix (Join-Path $root 'supabase\tests\runner')
+if ($LASTEXITCODE -ne 0) { throw 'Cloud runner checks failed.' }
 $prerequisites = Join-Path $root 'installer\prerequisites'
 New-Item -ItemType Directory -Force -Path $prerequisites | Out-Null
 $bootstrapper = Join-Path $prerequisites 'MicrosoftEdgeWebview2Setup.exe'

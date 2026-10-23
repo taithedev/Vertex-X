@@ -14,3 +14,5 @@ frontend/node_modules/
 frontend/dist/
 frontend/test-results/
 installer/prerequisites/
+
+supabase/tests/runner/node_modules/

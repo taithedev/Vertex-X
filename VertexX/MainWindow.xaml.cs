@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -28,7 +29,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _fileGate = new(1, 1);
     private Dictionary<string, string> _paths = new();
     private Preferences _preferences = new();
-    private CancellationTokenSource? _execution;
+    private string? _cloudRunId;
     private bool _allowClose;
     private bool _ready;
     private bool _closed;
@@ -56,6 +57,7 @@ public partial class MainWindow : Window
             try { _preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(Path.Combine(_data, "settings.json")), Json) ?? new(); } catch { }
             try { _paths = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(_data, "documents.json"))) ?? new(); } catch { }
             _preferences.Normalize();
+            _timer.Interval = TimeSpan.FromMinutes(_preferences.UpdateCheckMinutes);
             if (Web.CoreWebView2 == null)
             {
                 var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_data, "WebView2"));
@@ -116,7 +118,7 @@ public partial class MainWindow : Window
             var result = await HandleAsync(method ?? "", payload);
             Send(new { id, ok = true, result });
         }
-        catch (Exception ex) { Send(new { id, ok = false, error = ex is OperationCanceledException ? "Execution stopped." : ex is MoonSharp.Interpreter.InterpreterException luaError ? luaError.DecoratedMessage ?? luaError.Message : ex.Message, output = ex.Data["VertexX.Output"] as string }); }
+        catch (Exception ex) { Send(new { id, ok = false, error = ex is OperationCanceledException ? "Execution stopped." : ex is MoonSharp.Interpreter.InterpreterException luaError ? luaError.DecoratedMessage ?? luaError.Message : ex.Message, output = ex.Data["VertexX.Output"] as string }); Send(new { type = "account", data = Account() }); }
     }
     private static string Text(JsonElement p, string name, int limit = 1_000_000)
     {
@@ -216,27 +218,43 @@ public partial class MainWindow : Window
                 }
                 finally { _fileGate.Release(); }
             }
+            case "cloud.session": return await _auth.CloudSessionAsync();
+            case "cloud.request": return await _auth.CloudRequestAsync(Text(p, "action", 40), p.GetProperty("data"));
+            case "auth.password": await _auth.ChangePasswordAsync(Text(p, "password", 1024)); return null;
             case "lua.run":
             {
-                if (_execution != null) throw new InvalidOperationException("A script is already running.");
-                var code = Text(p, "code");
-                using var cancellation = new CancellationTokenSource();
-                _execution = cancellation;
+                if (_cloudRunId != null) throw new InvalidOperationException("A script is already running.");
+                var code = Text(p, "code", 100000);
+                var id = p.TryGetProperty("runId", out var requested) && requested.ValueKind == JsonValueKind.String ? requested.GetString() : Guid.NewGuid().ToString();
+                if (!Guid.TryParse(id, out _)) throw new ArgumentException("Invalid run ID.");
+                _cloudRunId = id;
                 try
                 {
-                    var runId = p.TryGetProperty("runId", out var run) && run.ValueKind == JsonValueKind.String ? run.GetString() : null;
-                    return await Task.Run(() => VertexLuaRuntime.Run(code, cancellation.Token, onOutput: text =>
-                        Dispatcher.BeginInvoke(new Action(() => Send(new { type = "lua.output", data = new { runId, text } })))));
+                    var result = await _auth.CloudRequestAsync("run.execute", new { source = code, runId = id });
+                    if (!result.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+                    {
+                        var error = new InvalidOperationException(result.TryGetProperty("error", out var reason) ? reason.GetString() : "Script failed. No crystals charged.");
+                        if (result.TryGetProperty("output", out var output)) error.Data["VertexX.Output"] = output.GetString();
+                        throw error;
+                    }
+                    return result;
                 }
-                finally { _execution = null; }
+                catch (Exception ex) when (ex is HttpRequestException or System.Threading.Tasks.TaskCanceledException)
+                {
+                    throw new InvalidOperationException("The run outcome is unknown. Check recent runs in Community before retrying.", ex);
+                }
+                finally { _cloudRunId = null; }
             }
-            case "lua.stop": _execution?.Cancel(); return null;
+            case "lua.stop":
+                if (_cloudRunId != null) await _auth.CloudRequestAsync("run.cancel", new { runId = _cloudRunId });
+                return null;
             case "settings.save":
                 var prefs = p.Deserialize<Preferences>(Json) ?? throw new ArgumentException("Invalid preferences.");
                 prefs.FontSize = double.IsFinite(prefs.FontSize) ? Math.Clamp(prefs.FontSize, 10, 24) : 14;
                 prefs.Normalize();
                 AtomicWrite(Path.Combine(_data, "settings.json"), JsonSerializer.Serialize(prefs, Json));
                 _preferences = prefs;
+                _timer.Interval = TimeSpan.FromMinutes(prefs.UpdateCheckMinutes);
                 return _preferences;
             case "auth.login":
             case "auth.signup":
@@ -245,7 +263,7 @@ public partial class MainWindow : Window
                 if (!await _accountGate.WaitAsync(0)) throw new InvalidOperationException("An account request is already running.");
                 try
                 {
-                    if (method == "auth.logout") { _auth.SignOut(); return new { message = "Signed out.", account = Account() }; }
+                    if (method == "auth.logout") { var revoked = await _auth.SignOutRemoteAsync(); return new { message = revoked ? "Signed out." : "Signed out locally. The server could not be reached to revoke this session.", account = Account() }; }
                     var email = Text(p, "email", 254);
                     var password = Text(p, "password", 1024);
                     var message = method == "auth.login" ? await _auth.SignInAsync(email, password) : await _auth.SignUpAsync(Text(p, "username", 20), email, password);
@@ -285,7 +303,6 @@ public partial class MainWindow : Window
             if (!_closeRequested) { _closeRequested = true; Send(new { type = "request-close" }); }
             return;
         }
-        _execution?.Cancel();
         _timer.Stop();
         if (_updates.PendingVersion != null && !_updates.InstallPendingOnExit())
             MessageBox.Show(this, "The update could not start. Your current version remains installed. Use Updates to retry.", "Vertex X Updates");
@@ -305,8 +322,10 @@ public sealed class Preferences
     public string MouseEffect { get; set; } = "glow";
     public double EffectIntensity { get; set; } = 35;
     public bool MotionEnabled { get; set; } = true;
+    public int UpdateCheckMinutes { get; set; } = 15;
     public void Normalize()
     {
+        if (UpdateCheckMinutes is not (15 or 60 or 240)) UpdateCheckMinutes = 15;
         FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 10, 24) : 14;
         EffectIntensity = double.IsFinite(EffectIntensity) ? Math.Clamp(EffectIntensity, 0, 100) : 35;
         if (Accent is not ("violet" or "mint" or "ice" or "rose" or "amber" or "cyan" or "lime" or "white")) Accent = "violet";
